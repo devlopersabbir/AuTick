@@ -186,9 +186,15 @@ export function getSessionInfo(timestampInSeconds: number): SessionInfo {
   };
 }
 
-export function getNextMarketOpenTimestamp(now: Date = new Date()): number | null {
+export interface MarketSessionBoundary {
+  action: 'opens' | 'closes';
+  timestamp: number;
+}
+
+export function getNextMarketSessionBoundary(now: Date = new Date()): MarketSessionBoundary {
   const nowTimestamp = Math.floor(now.getTime() / 1000);
-  if (getSessionInfo(nowTimestamp).isMarketOpen) return null;
+  const session = getSessionInfo(nowTimestamp);
+  const action = session.isMarketOpen ? 'closes' : 'opens';
 
   const newYorkFormatter = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/New_York',
@@ -208,16 +214,18 @@ export function getNextMarketOpenTimestamp(now: Date = new Date()): number | nul
   const month = Number(localParts.month);
   const day = Number(localParts.day);
   const weekday = localParts.weekday;
-  const daysUntilOpen = weekday === 'Sat' ? 1 : weekday === 'Fri' ? 2 : 0;
-  const targetDate = new Date(Date.UTC(year, month - 1, day + daysUntilOpen));
+  const daysUntilBoundary = session.isMarketOpen
+    ? (weekday === 'Sun' ? 1 : 0)
+    : (weekday === 'Sat' ? 1 : weekday === 'Fri' ? 2 : 0);
+  const targetDate = new Date(Date.UTC(year, month - 1, day + daysUntilBoundary));
   const targetWallTime = Date.UTC(
     targetDate.getUTCFullYear(),
     targetDate.getUTCMonth(),
     targetDate.getUTCDate(),
-    18
+    session.isMarketOpen ? 17 : 18
   );
 
-  // Resolve 6 PM New York time to UTC, including the current DST offset.
+  // Resolve the New York wall time to UTC, including the current DST offset.
   let targetTimestamp = targetWallTime;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const targetParts = Object.fromEntries(
@@ -234,7 +242,12 @@ export function getNextMarketOpenTimestamp(now: Date = new Date()): number | nul
     targetTimestamp += targetWallTime - targetAsUtc;
   }
 
-  return targetTimestamp;
+  return { action, timestamp: targetTimestamp };
+}
+
+export function getNextMarketOpenTimestamp(now: Date = new Date()): number | null {
+  const boundary = getNextMarketSessionBoundary(now);
+  return boundary.action === 'opens' ? boundary.timestamp : null;
 }
 
 /**

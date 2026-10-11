@@ -20,7 +20,7 @@ import { Candle } from '@/types';
 import { DataPoint, PositionToolDrawing, ToolType, Drawing } from '@/types/drawings';
 import {
   getSessionInfo,
-  getNextMarketOpenTimestamp,
+  getNextMarketSessionBoundary,
   formatTickMarkAmPm,
   formatCrosshairTimeWithSession,
 } from '@/lib/utils/sessions';
@@ -38,6 +38,29 @@ import {
   Loader2,
   Clock3,
 } from 'lucide-react';
+
+const TIMEFRAME_SECONDS: Record<string, number> = {
+  '1m': 60,
+  '3m': 180,
+  '5m': 300,
+  '15m': 900,
+  '30m': 1800,
+  '1h': 3600,
+  '2h': 7200,
+  '4h': 14400,
+  '1d': 86400,
+};
+
+const formatCountdown = (totalSeconds: number, showDays = false) => {
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const dayPrefix = showDays && days > 0 ? `${days}d ` : '';
+  return `${dayPrefix}${[hours, minutes, seconds]
+    .map((value) => value.toString().padStart(2, '0'))
+    .join(':')}`;
+};
 
 interface ProjectedDrawing {
   id: string;
@@ -124,6 +147,7 @@ export const Chart: React.FC = () => {
   const entryLineRef = useRef<IPriceLine | null>(null);
   const slLineRef = useRef<IPriceLine | null>(null);
   const tpLineRef = useRef<IPriceLine | null>(null);
+  const candleCloseLineRef = useRef<IPriceLine | null>(null);
 
   // Store data
   const candles = useTradingSimulatorStore((s) => s.candles);
@@ -398,6 +422,7 @@ export const Chart: React.FC = () => {
       entryLineRef.current = null;
       slLineRef.current = null;
       tpLineRef.current = null;
+      candleCloseLineRef.current = null;
     };
   }, []);
 
@@ -1114,21 +1139,62 @@ export const Chart: React.FC = () => {
   const isUp = priceChange >= 0;
 
   const isInteractiveToolActive = activeTool !== 'cursor';
-  const nextMarketOpen = clockNow === null
+  const currentMarketSession = clockNow === null
     ? null
-    : getNextMarketOpenTimestamp(new Date(clockNow));
-  const secondsUntilOpen = nextMarketOpen === null
+    : getSessionInfo(Math.floor(clockNow / 1000));
+  const sessionBoundary = clockNow === null
     ? null
-    : Math.max(0, Math.ceil((nextMarketOpen - (clockNow ?? 0)) / 1000));
-  const countdownDays = secondsUntilOpen === null ? 0 : Math.floor(secondsUntilOpen / 86400);
-  const countdownHours = secondsUntilOpen === null ? 0 : Math.floor((secondsUntilOpen % 86400) / 3600);
-  const countdownMinutes = secondsUntilOpen === null ? 0 : Math.floor((secondsUntilOpen % 3600) / 60);
-  const countdownSeconds = secondsUntilOpen === null ? 0 : secondsUntilOpen % 60;
-  const countdownText = secondsUntilOpen === null
+    : getNextMarketSessionBoundary(new Date(clockNow));
+  const sessionSecondsRemaining = sessionBoundary === null
     ? null
-    : `${countdownDays > 0 ? `${countdownDays}d ` : ''}${[countdownHours, countdownMinutes, countdownSeconds]
-      .map((value) => value.toString().padStart(2, '0'))
-      .join(':')}`;
+    : Math.max(0, Math.ceil((sessionBoundary.timestamp - (clockNow ?? 0)) / 1000));
+  const sessionCountdown = sessionSecondsRemaining === null
+    ? null
+    : formatCountdown(sessionSecondsRemaining, true);
+  const timeframeSeconds = TIMEFRAME_SECONDS[currentTimeframe.toLowerCase()] ?? 60;
+  const nextCandleClose = clockNow === null
+    ? null
+    : (Math.floor(clockNow / (timeframeSeconds * 1000)) + 1) * timeframeSeconds * 1000;
+  const candleSecondsRemaining = clockNow === null || nextCandleClose === null || !isLiveMode ||
+    !currentCandle || !currentMarketSession?.isMarketOpen
+    ? null
+    : Math.max(0, Math.ceil((nextCandleClose - clockNow) / 1000));
+  const candleCountdown = candleSecondsRemaining === null
+    ? null
+    : formatCountdown(candleSecondsRemaining);
+
+  useEffect(() => {
+    const series = seriesRef.current;
+    if (!series) return;
+
+    if (!candleCountdown || !currentCandle || !isLiveMode || !currentMarketSession?.isMarketOpen) {
+      if (candleCloseLineRef.current) {
+        series.removePriceLine(candleCloseLineRef.current);
+        candleCloseLineRef.current = null;
+      }
+      series.applyOptions({ lastValueVisible: true });
+      return;
+    }
+
+    const priceColor = currentCandle.close >= currentCandle.open ? '#089981' : '#f23645';
+    const priceLineOptions = {
+      price: currentCandle.close,
+      color: priceColor,
+      lineWidth: 1 as const,
+      lineStyle: LineStyle.Solid,
+      lineVisible: false,
+      axisLabelVisible: true,
+      axisLabelColor: priceColor,
+      title: candleCountdown,
+    };
+
+    series.applyOptions({ lastValueVisible: false });
+    if (candleCloseLineRef.current) {
+      candleCloseLineRef.current.applyOptions(priceLineOptions);
+    } else {
+      candleCloseLineRef.current = series.createPriceLine(priceLineOptions);
+    }
+  }, [candleCountdown, currentCandle, currentMarketSession?.isMarketOpen, isLiveMode]);
 
   return (
     <div
@@ -1247,11 +1313,13 @@ export const Chart: React.FC = () => {
             })()}
           </>
         )}
-
-        {countdownText && (
-          <div className="flex items-center gap-1.5 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-300">
+        {sessionCountdown && sessionBoundary && (
+          <div className={`flex items-center gap-1.5 text-[10px] font-semibold ${
+            sessionBoundary.action === 'opens' ? 'text-amber-300' : 'text-emerald-300'
+          }`}>
             <Clock3 className="h-3 w-3" />
-            <span>GOLD OPENS IN {countdownText}</span>
+            <span>MARKET {sessionBoundary.action.toUpperCase()} IN</span>
+            <span className="font-mono text-neutral-100 tabular-nums">{sessionCountdown}</span>
           </div>
         )}
       </div>
