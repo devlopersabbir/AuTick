@@ -186,6 +186,57 @@ export function getSessionInfo(timestampInSeconds: number): SessionInfo {
   };
 }
 
+export function getNextMarketOpenTimestamp(now: Date = new Date()): number | null {
+  const nowTimestamp = Math.floor(now.getTime() / 1000);
+  if (getSessionInfo(nowTimestamp).isMarketOpen) return null;
+
+  const newYorkFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    weekday: 'short',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hourCycle: 'h23',
+  });
+  const localParts = Object.fromEntries(
+    newYorkFormatter.formatToParts(now).map(({ type, value }) => [type, value])
+  );
+  const year = Number(localParts.year);
+  const month = Number(localParts.month);
+  const day = Number(localParts.day);
+  const weekday = localParts.weekday;
+  const daysUntilOpen = weekday === 'Sat' ? 1 : weekday === 'Fri' ? 2 : 0;
+  const targetDate = new Date(Date.UTC(year, month - 1, day + daysUntilOpen));
+  const targetWallTime = Date.UTC(
+    targetDate.getUTCFullYear(),
+    targetDate.getUTCMonth(),
+    targetDate.getUTCDate(),
+    18
+  );
+
+  // Resolve 6 PM New York time to UTC, including the current DST offset.
+  let targetTimestamp = targetWallTime;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const targetParts = Object.fromEntries(
+      newYorkFormatter.formatToParts(new Date(targetTimestamp)).map(({ type, value }) => [type, value])
+    );
+    const targetAsUtc = Date.UTC(
+      Number(targetParts.year),
+      Number(targetParts.month) - 1,
+      Number(targetParts.day),
+      Number(targetParts.hour),
+      Number(targetParts.minute),
+      Number(targetParts.second)
+    );
+    targetTimestamp += targetWallTime - targetAsUtc;
+  }
+
+  return targetTimestamp;
+}
+
 /**
  * Format tick mark timestamp for Lightweight Charts bottom timescale in AM/PM
  */

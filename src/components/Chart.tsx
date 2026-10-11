@@ -20,6 +20,7 @@ import { Candle } from '@/types';
 import { DataPoint, PositionToolDrawing, ToolType, Drawing } from '@/types/drawings';
 import {
   getSessionInfo,
+  getNextMarketOpenTimestamp,
   formatTickMarkAmPm,
   formatCrosshairTimeWithSession,
 } from '@/lib/utils/sessions';
@@ -35,6 +36,7 @@ import {
   ArrowDown,
   Trash2,
   Loader2,
+  Clock3,
 } from 'lucide-react';
 
 interface ProjectedDrawing {
@@ -175,6 +177,23 @@ export const Chart: React.FC = () => {
 
   // Hovered candle for OHLC legend
   const [hoveredCandle, setHoveredCandle] = useState<Candle | null>(null);
+  const [clockNow, setClockNow] = useState<number | null>(null);
+
+  const [chartTheme, setChartTheme] = useState({
+    upColor: '#089981',
+    downColor: '#f23645',
+    wickUpColor: '#089981',
+    wickDownColor: '#f23645',
+    borderUpColor: '#089981',
+    borderDownColor: '#f23645',
+  });
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    setClockNow(Date.now());
+    const intervalId = setInterval(() => setClockNow(Date.now()), 1000);
+    return () => clearInterval(intervalId);
+  }, []);
 
   // Real-time live market polling interval (every 2.5s)
   useEffect(() => {
@@ -300,11 +319,13 @@ export const Chart: React.FC = () => {
     });
 
     const candlestickSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#089981',
-      downColor: '#f23645',
+      upColor: chartTheme.upColor,
+      downColor: chartTheme.downColor,
       borderVisible: false,
-      wickUpColor: '#089981',
-      wickDownColor: '#f23645',
+      wickUpColor: chartTheme.wickUpColor,
+      wickDownColor: chartTheme.wickDownColor,
+      borderUpColor: chartTheme.borderUpColor,
+      borderDownColor: chartTheme.borderDownColor,
     });
 
     const markersPlugin = createSeriesMarkers(candlestickSeries, []);
@@ -379,6 +400,20 @@ export const Chart: React.FC = () => {
       tpLineRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const series = seriesRef.current;
+    if (!series) return;
+
+    series.applyOptions({
+      upColor: chartTheme.upColor,
+      downColor: chartTheme.downColor,
+      wickUpColor: chartTheme.wickUpColor,
+      wickDownColor: chartTheme.wickDownColor,
+      borderUpColor: chartTheme.borderUpColor,
+      borderDownColor: chartTheme.borderDownColor,
+    });
+  }, [chartTheme]);
 
   // Update candle data strictly up to currentIndex (no future leakage!)
   useEffect(() => {
@@ -765,6 +800,20 @@ export const Chart: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedDrawingId, removeDrawing, setSelectedDrawingId]);
 
+  const handleResetChartView = () => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    chart.timeScale().fitContent();
+    setContextMenu(null);
+  };
+
+  const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleCloseContextMenu = () => setContextMenu(null);
+
   // Mouse interaction handler on SVG overlay
   const handleOverlayMouseMove = (e: React.MouseEvent) => {
     const pt = getChartDataPoint(e.clientX, e.clientY);
@@ -1065,9 +1114,28 @@ export const Chart: React.FC = () => {
   const isUp = priceChange >= 0;
 
   const isInteractiveToolActive = activeTool !== 'cursor';
+  const nextMarketOpen = clockNow === null
+    ? null
+    : getNextMarketOpenTimestamp(new Date(clockNow));
+  const secondsUntilOpen = nextMarketOpen === null
+    ? null
+    : Math.max(0, Math.ceil((nextMarketOpen - (clockNow ?? 0)) / 1000));
+  const countdownDays = secondsUntilOpen === null ? 0 : Math.floor(secondsUntilOpen / 86400);
+  const countdownHours = secondsUntilOpen === null ? 0 : Math.floor((secondsUntilOpen % 86400) / 3600);
+  const countdownMinutes = secondsUntilOpen === null ? 0 : Math.floor((secondsUntilOpen % 3600) / 60);
+  const countdownSeconds = secondsUntilOpen === null ? 0 : secondsUntilOpen % 60;
+  const countdownText = secondsUntilOpen === null
+    ? null
+    : `${countdownDays > 0 ? `${countdownDays}d ` : ''}${[countdownHours, countdownMinutes, countdownSeconds]
+      .map((value) => value.toString().padStart(2, '0'))
+      .join(':')}`;
 
   return (
-    <div className="relative flex-1 w-full h-full min-h-[460px] bg-[#090b10] select-none overflow-hidden flex flex-col">
+    <div
+      className="relative flex-1 w-full h-full min-h-[460px] bg-[#090b10] select-none overflow-hidden flex flex-col"
+      onContextMenu={handleContextMenu}
+      onClick={handleCloseContextMenu}
+    >
       {/* Background Watermark */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03]">
         <span className="font-extrabold text-7xl md:text-9xl text-white tracking-widest font-mono">
@@ -1178,6 +1246,13 @@ export const Chart: React.FC = () => {
               );
             })()}
           </>
+        )}
+
+        {countdownText && (
+          <div className="flex items-center gap-1.5 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-300">
+            <Clock3 className="h-3 w-3" />
+            <span>GOLD OPENS IN {countdownText}</span>
+          </div>
         )}
       </div>
 
@@ -1303,6 +1378,68 @@ export const Chart: React.FC = () => {
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 bg-emerald-600/90 border border-emerald-400/50 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-2xl backdrop-blur-md flex items-center space-x-2 animate-bounce">
           <Zap className="h-4 w-4" />
           <span>{orderNotice}</span>
+        </div>
+      )}
+
+      {contextMenu && (
+        <div
+          className="absolute z-50 min-w-[220px] rounded-xl border border-[#2b354d] bg-[#0f1422]/95 shadow-2xl backdrop-blur-md text-sm text-neutral-200"
+          style={{ left: Math.min(contextMenu.x - 120, window.innerWidth - 240), top: Math.min(contextMenu.y + 8, window.innerHeight - 220) }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={handleResetChartView}
+            className="w-full px-3 py-2.5 text-left hover:bg-white/5 transition-colors cursor-pointer border-b border-[#1f2a3d]"
+          >
+            Reset chart view
+          </button>
+
+          <div className="px-3 py-2.5 border-b border-[#1f2a3d]">
+            <div className="mb-2 text-[11px] uppercase tracking-wide text-neutral-400">Candle colors</div>
+            <div className="flex items-center gap-2 mb-2">
+              <button
+                type="button"
+                onClick={() => setChartTheme((prev) => ({ ...prev, upColor: '#089981', wickUpColor: '#089981', borderUpColor: '#089981' }))}
+                className="h-5 w-5 rounded-full border border-white/20 bg-[#089981] cursor-pointer"
+                title="Green up candles"
+              />
+              <button
+                type="button"
+                onClick={() => setChartTheme((prev) => ({ ...prev, downColor: '#f23645', wickDownColor: '#f23645', borderDownColor: '#f23645' }))}
+                className="h-5 w-5 rounded-full border border-white/20 bg-[#f23645] cursor-pointer"
+                title="Red down candles"
+              />
+              <button
+                type="button"
+                onClick={() => setChartTheme((prev) => ({
+                  ...prev,
+                  upColor: '#22c55e',
+                  downColor: '#ef4444',
+                  wickUpColor: '#22c55e',
+                  wickDownColor: '#ef4444',
+                  borderUpColor: '#22c55e',
+                  borderDownColor: '#ef4444',
+                }))}
+                className="h-5 w-5 rounded-full border border-white/20 bg-gradient-to-r from-[#22c55e] to-[#ef4444] cursor-pointer"
+                title="Green/red theme"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setChartTheme((prev) => ({ ...prev, upColor: '#00d2ff', wickUpColor: '#00d2ff', borderUpColor: '#00d2ff' }))}
+                className="h-5 w-5 rounded-full border border-white/20 bg-[#00d2ff] cursor-pointer"
+                title="Cyan up candles"
+              />
+              <button
+                type="button"
+                onClick={() => setChartTheme((prev) => ({ ...prev, downColor: '#f472b6', wickDownColor: '#f472b6', borderDownColor: '#f472b6' }))}
+                className="h-5 w-5 rounded-full border border-white/20 bg-[#f472b6] cursor-pointer"
+                title="Pink down candles"
+              />
+            </div>
+          </div>
         </div>
       )}
 
