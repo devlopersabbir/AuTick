@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+:root {
+  --background: #08090c;
+  --foreground: #f1f5f9;
+  --surface-primary: #0d1017;
+  --surface-secondary: #131722;
+  --surface-tertiary: #1b202e;
+  --border-subtle: #1e2433;
+  --border-strong: #2a3245;
+  --color-gold: #f59e0b;
+  --color-bull: #089981;
+  --color-bear: #f23645;
+  --color-accent: #2962ff;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow: hidden;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tabular numbers for financial tick rates */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom scrollbars for trading terminal aesthetic */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #232938;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3b455c;
+}
+
+/* Glow effects */
+.glow-gold {
+  box-shadow: 0 0 15px -3px rgba(245, 158, 11, 0.25);
+}
+
+.glow-bull {
+  box-shadow: 0 0 15px -3px rgba(8, 153, 129, 0.3);
+}
+
+.glow-bear {
+  box-shadow: 0 0 15px -3px rgba(242, 54, 69, 0.3);
+}
