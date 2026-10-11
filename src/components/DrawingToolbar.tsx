@@ -114,6 +114,9 @@ export const DrawingToolbar: React.FC = () => {
     }
   };
 
+  const unhideAllDrawings = useTradingSimulatorStore((s) => s.unhideAllDrawings);
+  const hiddenCount = drawings.filter((d) => d.hidden).length;
+
   return (
     <aside
       aria-label="TradingView Tools"
@@ -171,8 +174,24 @@ export const DrawingToolbar: React.FC = () => {
         })}
       </div>
 
-      {/* Bottom Clear Trash Action */}
-      <div className="w-full flex flex-col items-center pt-1 border-t border-[#1c2230]">
+      {/* Bottom Actions: Unhide All & Clear Trash */}
+      <div className="w-full flex flex-col items-center pt-1 border-t border-[#1c2230] gap-1">
+        {hiddenCount > 0 && (
+          <div className="relative group flex justify-center w-full">
+            <button
+              type="button"
+              onClick={unhideAllDrawings}
+              title={`Unhide ${hiddenCount} hidden drawings`}
+              className="flex items-center justify-center w-8 h-8 rounded-lg text-amber-400 hover:bg-amber-500/15 border border-amber-500/30 transition-all cursor-pointer animate-pulse"
+            >
+              <span className="text-xs font-bold font-mono">👁️</span>
+            </button>
+            <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center whitespace-nowrap bg-[#161d2d] border border-[#232b3d] px-2.5 py-1 rounded-md text-[11px] font-medium text-amber-300 shadow-xl pointer-events-none z-50">
+              Unhide {hiddenCount} Drawings
+            </div>
+          </div>
+        )}
+
         <div className="relative group flex justify-center w-full">
           <button
             type="button"

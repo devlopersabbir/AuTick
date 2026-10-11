@@ -189,4 +189,63 @@ export class BybitMarketDataProvider implements MarketDataProvider {
 
     return validateAndSortCandles(rawList);
   }
+
+  async fetchOlderCandles(endTimestamp: number, timeframe: string = '1m', limit: number = 1000): Promise<Candle[]> {
+    const timeframeMap: Record<string, string> = {
+      '1m': '1',
+      '3m': '3',
+      '5m': '5',
+      '15m': '15',
+      '30m': '30',
+      '1h': '60',
+      '2h': '120',
+      '4h': '240',
+      '1d': 'D',
+      'd': 'D',
+    };
+    const requestedTf = timeframe.toLowerCase();
+    const bybitInterval = timeframeMap[requestedTf] || '1';
+
+    // End 1 second prior to target timestamp
+    const endMs = (endTimestamp - 1) * 1000;
+
+    const url = new URL(this.baseUrl);
+    url.searchParams.set('category', 'linear');
+    url.searchParams.set('symbol', 'XAUUSDT');
+    url.searchParams.set('interval', bybitInterval);
+    url.searchParams.set('end', endMs.toString());
+    url.searchParams.set('limit', Math.min(limit, 1000).toString());
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'AuTick-MarketReplay/1.0',
+      },
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Bybit API HTTP error ${response.status}: ${response.statusText}`);
+    }
+
+    const json: BybitKlineResponse = await response.json();
+    if (json.retCode !== 0 || !json.result?.list) {
+      return [];
+    }
+
+    const rawList: Candle[] = [];
+    for (const item of json.result.list) {
+      const candleStartMs = parseInt(item[0], 10);
+      rawList.push({
+        timestamp: Math.floor(candleStartMs / 1000),
+        open: parseFloat(item[1]),
+        high: parseFloat(item[2]),
+        low: parseFloat(item[3]),
+        close: parseFloat(item[4]),
+        volume: parseFloat(item[5]),
+      });
+    }
+
+    return validateAndSortCandles(rawList);
+  }
 }

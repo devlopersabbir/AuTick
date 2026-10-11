@@ -13,28 +13,65 @@ import {
   UTCTimestamp,
   Time,
   SeriesMarker,
+  TickMarkType,
 } from 'lightweight-charts';
 import { useTradingSimulatorStore } from '@/stores/useTradingSimulatorStore';
 import { Candle } from '@/types';
-import { DataPoint, PositionToolDrawing, ToolType } from '@/types/drawings';
-import { Activity, Radio, Scissors, Play, X, Zap } from 'lucide-react';
+import { DataPoint, PositionToolDrawing, ToolType, Drawing } from '@/types/drawings';
+import {
+  getSessionInfo,
+  formatTickMarkAmPm,
+  formatCrosshairTimeWithSession,
+} from '@/lib/utils/sessions';
+import {
+  Activity,
+  Radio,
+  Scissors,
+  Play,
+  X,
+  Zap,
+  Eye,
+  ArrowUp,
+  ArrowDown,
+  Trash2,
+  Loader2,
+} from 'lucide-react';
 
 interface ProjectedDrawing {
   id: string;
   type: ToolType;
   color?: string;
+  hidden?: boolean;
+  raw: Drawing;
+
+  // Selected toolbar coordinates
+  anchor: { x: number; y: number };
+
   // For trendline
   p1?: { x: number; y: number };
   p2?: { x: number; y: number };
+
   // For horizontal_line
   y?: number;
   price?: number;
+
   // For rectangle
   rect?: { x: number; y: number; width: number; height: number };
+  corners?: {
+    tl: { x: number; y: number };
+    tr: { x: number; y: number };
+    br: { x: number; y: number };
+    bl: { x: number; y: number };
+  };
+
   // For circle
   circle?: { cx: number; cy: number; radius: number };
+  centerHandle?: { x: number; y: number };
+  edgeHandle?: { x: number; y: number };
+
   // For text
   text?: { x: number; y: number; text: string };
+
   // For position tool
   position?: {
     isLong: boolean;
@@ -50,7 +87,12 @@ interface ProjectedDrawing {
     rrRatio: string;
     tpPrice: number;
     slPrice: number;
-    raw: PositionToolDrawing;
+    entryPrice: number;
+    tpHandle: { x: number; y: number };
+    slHandle: { x: number; y: number };
+    entryHandle: { x: number; y: number };
+    rightHandle: { x: number; y: number };
+    rawPos: PositionToolDrawing;
   };
 }
 
@@ -58,6 +100,16 @@ interface ProjectedPreview {
   trendline?: { x1: number; y1: number; x2: number; y2: number };
   rectangle?: { x: number; y: number; width: number; height: number };
   circle?: { cx: number; cy: number; radius: number };
+}
+
+interface DragState {
+  mode: 'move' | 'resize';
+  drawingId: string;
+  handle?: string;
+  startClientX: number;
+  startClientY: number;
+  startPoint: DataPoint;
+  initialDrawing: Drawing;
 }
 
 export const Chart: React.FC = () => {
@@ -81,22 +133,34 @@ export const Chart: React.FC = () => {
   const isLiveMode = useTradingSimulatorStore((s) => s.isLiveMode);
   const updateLiveCandles = useTradingSimulatorStore((s) => s.updateLiveCandles);
 
+  // Infinite Scrollback
+  const isLoadingOlderData = useTradingSimulatorStore((s) => s.isLoadingOlderData);
+  const hasReachedBeginning = useTradingSimulatorStore((s) => s.hasReachedBeginning);
+
   // Tools & Drawings
   const activeTool = useTradingSimulatorStore((s) => s.activeTool);
   const setActiveTool = useTradingSimulatorStore((s) => s.setActiveTool);
   const drawings = useTradingSimulatorStore((s) => s.drawings);
+  const selectedDrawingId = useTradingSimulatorStore((s) => s.selectedDrawingId);
+  const setSelectedDrawingId = useTradingSimulatorStore((s) => s.setSelectedDrawingId);
   const addDrawing = useTradingSimulatorStore((s) => s.addDrawing);
+  const updateDrawing = useTradingSimulatorStore((s) => s.updateDrawing);
   const removeDrawing = useTradingSimulatorStore((s) => s.removeDrawing);
+  const reorderDrawing = useTradingSimulatorStore((s) => s.reorderDrawing);
+  const toggleHideDrawing = useTradingSimulatorStore((s) => s.toggleHideDrawing);
   const cutToBar = useTradingSimulatorStore((s) => s.cutToBar);
   const returnToLive = useTradingSimulatorStore((s) => s.returnToLive);
   const openOrder = useTradingSimulatorStore((s) => s.openOrder);
 
-  // Drawing state
+  // Interactive drawing creation state
   const [drawingStartPoint, setDrawingStartPoint] = useState<DataPoint | null>(null);
   const [currentMousePoint, setCurrentMousePoint] = useState<{ x: number; y: number; time: number; price: number } | null>(null);
   const [textInputPos, setTextInputPos] = useState<{ x: number; y: number; point: DataPoint } | null>(null);
   const [textInputValue, setTextInputValue] = useState('');
   const [orderNotice, setOrderNotice] = useState<string | null>(null);
+
+  // Dragging and resizing state
+  const [dragState, setDragState] = useState<DragState | null>(null);
 
   // Projected SVG coordinates (computed in effect, not in render)
   const [projectedDrawings, setProjectedDrawings] = useState<ProjectedDrawing[]>([]);
@@ -206,10 +270,20 @@ export const Chart: React.FC = () => {
           bottom: 0.1,
         },
       },
+      localization: {
+        timeFormatter: (time: Time) => {
+          const timestamp = typeof time === 'number' ? time : 0;
+          return formatCrosshairTimeWithSession(timestamp);
+        },
+      },
       timeScale: {
         borderColor: '#1e2638',
         timeVisible: true,
         secondsVisible: false,
+        tickMarkFormatter: (time: Time, tickMarkType: TickMarkType) => {
+          const timestamp = typeof time === 'number' ? time : 0;
+          return formatTickMarkAmPm(timestamp, tickMarkType);
+        },
       },
       handleScroll: {
         mouseWheel: true,
@@ -265,7 +339,18 @@ export const Chart: React.FC = () => {
     // Re-project drawings on pan/zoom
     const triggerRerender = () => setViewportKey((k) => k + 1);
     chart.timeScale().subscribeVisibleTimeRangeChange(triggerRerender);
-    chart.timeScale().subscribeVisibleLogicalRangeChange(triggerRerender);
+
+    // Infinite Historical Scrollback: detect scroll near the left edge
+    chart.timeScale().subscribeVisibleLogicalRangeChange((logicalRange) => {
+      triggerRerender();
+      if (logicalRange && logicalRange.from < 30) {
+        // Fetch older historical candles seamlessly
+        const state = useTradingSimulatorStore.getState();
+        if (!state.isLoadingOlderData && !state.hasReachedBeginning && state.candles.length > 0) {
+          state.fetchOlderCandles();
+        }
+      }
+    });
 
     // Responsive resize observer
     const resizeObserver = new ResizeObserver((entries) => {
@@ -279,7 +364,6 @@ export const Chart: React.FC = () => {
     return () => {
       resizeObserver.disconnect();
       chart.timeScale().unsubscribeVisibleTimeRangeChange(triggerRerender);
-      chart.timeScale().unsubscribeVisibleLogicalRangeChange(triggerRerender);
       chart.remove();
       chartRef.current = null;
       seriesRef.current = null;
@@ -315,7 +399,7 @@ export const Chart: React.FC = () => {
         close: nextCandle.close,
       });
     } else {
-      // Re-set entire visible slice on jump, reset, cut, or new dataset
+      // Re-set entire visible slice on jump, reset, cut, or older data prepended
       const visible = candles.slice(0, currentIndex + 1).map((c) => ({
         time: c.timestamp as UTCTimestamp,
         open: c.open,
@@ -353,6 +437,9 @@ export const Chart: React.FC = () => {
             id: d.id,
             type: d.type,
             color: d.color,
+            hidden: d.hidden,
+            raw: d,
+            anchor: { x: 90, y },
             y,
             price: d.price,
           });
@@ -361,21 +448,43 @@ export const Chart: React.FC = () => {
         const p1 = toCoords(d.p1);
         const p2 = toCoords(d.p2);
         if (p1 && p2) {
-          results.push({ id: d.id, type: d.type, color: d.color, p1, p2 });
+          results.push({
+            id: d.id,
+            type: d.type,
+            color: d.color,
+            hidden: d.hidden,
+            raw: d,
+            anchor: { x: (p1.x + p2.x) / 2, y: Math.min(p1.y, p2.y) },
+            p1,
+            p2,
+          });
         }
       } else if (d.type === 'rectangle') {
         const p1 = toCoords(d.p1);
         const p2 = toCoords(d.p2);
         if (p1 && p2) {
+          const minX = Math.min(p1.x, p2.x);
+          const maxX = Math.max(p1.x, p2.x);
+          const minY = Math.min(p1.y, p2.y);
+          const maxY = Math.max(p1.y, p2.y);
           results.push({
             id: d.id,
             type: d.type,
             color: d.color,
+            hidden: d.hidden,
+            raw: d,
+            anchor: { x: minX, y: minY },
             rect: {
-              x: Math.min(p1.x, p2.x),
-              y: Math.min(p1.y, p2.y),
-              width: Math.abs(p1.x - p2.x),
-              height: Math.abs(p1.y - p2.y),
+              x: minX,
+              y: minY,
+              width: maxX - minX,
+              height: maxY - minY,
+            },
+            corners: {
+              tl: { x: minX, y: minY },
+              tr: { x: maxX, y: minY },
+              br: { x: maxX, y: maxY },
+              bl: { x: minX, y: maxY },
             },
           });
         }
@@ -388,7 +497,12 @@ export const Chart: React.FC = () => {
             id: d.id,
             type: d.type,
             color: d.color,
+            hidden: d.hidden,
+            raw: d,
+            anchor: { x: center.x, y: center.y - radius },
             circle: { cx: center.x, cy: center.y, radius },
+            centerHandle: center,
+            edgeHandle: { x: center.x + radius, y: center.y },
           });
         }
       } else if (d.type === 'text') {
@@ -398,6 +512,9 @@ export const Chart: React.FC = () => {
             id: d.id,
             type: d.type,
             color: d.color,
+            hidden: d.hidden,
+            raw: d,
+            anchor: pt,
             text: { x: pt.x, y: pt.y, text: d.text },
           });
         }
@@ -423,6 +540,9 @@ export const Chart: React.FC = () => {
             id: d.id,
             type: d.type,
             color: d.color,
+            hidden: d.hidden,
+            raw: d,
+            anchor: { x: startX, y: Math.min(targetZoneTop, stopZoneTop) },
             position: {
               isLong,
               startX,
@@ -437,7 +557,12 @@ export const Chart: React.FC = () => {
               rrRatio,
               tpPrice: d.takeProfitPrice,
               slPrice: d.stopLossPrice,
-              raw: d,
+              entryPrice: d.entryPoint.price,
+              tpHandle: { x: startX + boxWidth / 2, y: tpY },
+              slHandle: { x: startX + boxWidth / 2, y: slY },
+              entryHandle: { x: startX + boxWidth / 2, y: entryY },
+              rightHandle: { x: startX + boxWidth, y: entryY },
+              rawPos: d,
             },
           });
         }
@@ -498,7 +623,6 @@ export const Chart: React.FC = () => {
 
     if (!openPosition) return;
 
-    // 1. Entry price line
     entryLineRef.current = series.createPriceLine({
       price: openPosition.entryPrice,
       color: '#00d2ff',
@@ -508,7 +632,6 @@ export const Chart: React.FC = () => {
       title: `${openPosition.side} @ ${openPosition.entryPrice.toFixed(2)}`,
     });
 
-    // 2. Stop loss line
     if (openPosition.stopLoss !== undefined) {
       const riskPts = Math.abs(openPosition.entryPrice - openPosition.stopLoss);
       slLineRef.current = series.createPriceLine({
@@ -521,7 +644,6 @@ export const Chart: React.FC = () => {
       });
     }
 
-    // 3. Take profit line
     if (openPosition.takeProfit !== undefined) {
       const rewardPts = Math.abs(openPosition.takeProfit - openPosition.entryPrice);
       tpLineRef.current = series.createPriceLine({
@@ -580,23 +702,150 @@ export const Chart: React.FC = () => {
     markersPlugin.setMarkers(markers);
   }, [openPosition, tradeHistory, currentCandle]);
 
+  // Keyboard shortcut listener for selected drawing (Delete / Escape)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+
+      if (selectedDrawingId) {
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+          e.preventDefault();
+          removeDrawing(selectedDrawingId);
+        } else if (e.key === 'Escape') {
+          setSelectedDrawingId(null);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedDrawingId, removeDrawing, setSelectedDrawingId]);
+
   // Mouse interaction handler on SVG overlay
   const handleOverlayMouseMove = (e: React.MouseEvent) => {
     const pt = getChartDataPoint(e.clientX, e.clientY);
-    if (pt) {
-      setCurrentMousePoint(pt);
+    if (!pt) return;
+    setCurrentMousePoint(pt);
+
+    // Active drag handling for moving or resizing drawings
+    if (dragState) {
+      const currentPoint: DataPoint = { time: pt.time, price: pt.price };
+      const deltaPrice = currentPoint.price - dragState.startPoint.price;
+      const deltaTime = currentPoint.time - dragState.startPoint.time;
+      const init = dragState.initialDrawing;
+
+      if (dragState.mode === 'move') {
+        if (init.type === 'trendline') {
+          updateDrawing(dragState.drawingId, {
+            p1: { time: init.p1.time + deltaTime, price: init.p1.price + deltaPrice },
+            p2: { time: init.p2.time + deltaTime, price: init.p2.price + deltaPrice },
+          });
+        } else if (init.type === 'horizontal_line') {
+          updateDrawing(dragState.drawingId, {
+            price: init.price + deltaPrice,
+          });
+        } else if (init.type === 'rectangle') {
+          updateDrawing(dragState.drawingId, {
+            p1: { time: init.p1.time + deltaTime, price: init.p1.price + deltaPrice },
+            p2: { time: init.p2.time + deltaTime, price: init.p2.price + deltaPrice },
+          });
+        } else if (init.type === 'circle') {
+          updateDrawing(dragState.drawingId, {
+            center: { time: init.center.time + deltaTime, price: init.center.price + deltaPrice },
+            edge: { time: init.edge.time + deltaTime, price: init.edge.price + deltaPrice },
+          });
+        } else if (init.type === 'text') {
+          updateDrawing(dragState.drawingId, {
+            point: { time: init.point.time + deltaTime, price: init.point.price + deltaPrice },
+          });
+        } else if (init.type === 'long_position' || init.type === 'short_position') {
+          updateDrawing(dragState.drawingId, {
+            entryPoint: { time: init.entryPoint.time + deltaTime, price: init.entryPoint.price + deltaPrice },
+            stopLossPrice: init.stopLossPrice + deltaPrice,
+            takeProfitPrice: init.takeProfitPrice + deltaPrice,
+            targetTime: init.targetTime !== undefined ? init.targetTime + deltaTime : undefined,
+          });
+        }
+      } else if (dragState.mode === 'resize') {
+        const handle = dragState.handle;
+
+        // Rectangle corners
+        if (init.type === 'rectangle') {
+          if (handle === 'tl') {
+            updateDrawing(dragState.drawingId, {
+              p1: { time: currentPoint.time, price: currentPoint.price },
+            });
+          } else if (handle === 'br') {
+            updateDrawing(dragState.drawingId, {
+              p2: { time: currentPoint.time, price: currentPoint.price },
+            });
+          } else if (handle === 'tr') {
+            updateDrawing(dragState.drawingId, {
+              p1: { time: init.p1.time, price: currentPoint.price },
+              p2: { time: currentPoint.time, price: init.p2.price },
+            });
+          } else if (handle === 'bl') {
+            updateDrawing(dragState.drawingId, {
+              p1: { time: currentPoint.time, price: init.p1.price },
+              p2: { time: init.p2.time, price: currentPoint.price },
+            });
+          }
+        } else if (init.type === 'circle') {
+          if (handle === 'center') {
+            updateDrawing(dragState.drawingId, { center: currentPoint });
+          } else if (handle === 'edge') {
+            updateDrawing(dragState.drawingId, { edge: currentPoint });
+          }
+        } else if (init.type === 'trendline') {
+          if (handle === 'p1') {
+            updateDrawing(dragState.drawingId, { p1: currentPoint });
+          } else if (handle === 'p2') {
+            updateDrawing(dragState.drawingId, { p2: currentPoint });
+          }
+        } else if (init.type === 'long_position' || init.type === 'short_position') {
+          if (handle === 'tp') {
+            updateDrawing(dragState.drawingId, { takeProfitPrice: currentPoint.price });
+          } else if (handle === 'sl') {
+            updateDrawing(dragState.drawingId, { stopLossPrice: currentPoint.price });
+          } else if (handle === 'entry') {
+            updateDrawing(dragState.drawingId, {
+              entryPoint: { time: init.entryPoint.time, price: currentPoint.price },
+            });
+          } else if (handle === 'right') {
+            updateDrawing(dragState.drawingId, { targetTime: currentPoint.time });
+          }
+        }
+      }
+    }
+  };
+
+  const handleOverlayMouseUp = () => {
+    if (dragState) {
+      setDragState(null);
     }
   };
 
   const handleOverlayMouseLeave = () => {
     setCurrentMousePoint(null);
+    if (dragState) {
+      setDragState(null);
+    }
   };
 
   const handleOverlayClick = (e: React.MouseEvent) => {
+    if (dragState) return;
+
     const pt = getChartDataPoint(e.clientX, e.clientY);
     if (!pt) return;
 
     const clickedPoint: DataPoint = { time: pt.time, price: pt.price };
+
+    // If clicking on empty canvas with cursor, deselect drawing
+    if (activeTool === 'cursor') {
+      setSelectedDrawingId(null);
+      return;
+    }
 
     // 1. Bar Replay / Cut Tool
     if (activeTool === 'bar_replay') {
@@ -708,6 +957,31 @@ export const Chart: React.FC = () => {
     }
   };
 
+  const startDrag = (
+    e: React.MouseEvent,
+    drawingId: string,
+    mode: 'move' | 'resize',
+    handle?: string
+  ) => {
+    e.stopPropagation();
+    const pt = getChartDataPoint(e.clientX, e.clientY);
+    if (!pt) return;
+
+    const drawing = drawings.find((d) => d.id === drawingId);
+    if (!drawing) return;
+
+    setSelectedDrawingId(drawingId);
+    setDragState({
+      mode,
+      drawingId,
+      handle,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      startPoint: { time: pt.time, price: pt.price },
+      initialDrawing: JSON.parse(JSON.stringify(drawing)),
+    });
+  };
+
   const handleSaveTextAnnotation = () => {
     if (textInputPos && textInputValue.trim()) {
       addDrawing({
@@ -737,6 +1011,9 @@ export const Chart: React.FC = () => {
       setTimeout(() => setOrderNotice(null), 3500);
     }
   };
+
+  // Selected drawing for floating toolbar
+  const selectedProjected = projectedDrawings.find((d) => d.id === selectedDrawingId);
 
   // Display Candle Legend
   const activeCandle = hoveredCandle || currentCandle;
@@ -788,6 +1065,18 @@ export const Chart: React.FC = () => {
           </div>
         )}
 
+        {/* Older Historical Candles Loading Indicator */}
+        {isLoadingOlderData && (
+          <div className="flex items-center space-x-1.5 bg-[#161d2d] text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded text-[10px] font-medium animate-pulse">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            <span>Loading older candles...</span>
+          </div>
+        )}
+
+        {hasReachedBeginning && (
+          <span className="text-[10px] text-neutral-500 italic">Beginning of historical feed reached</span>
+        )}
+
         <div className="h-4 w-px bg-[#1e273a]" />
 
         {/* OHLC Readings */}
@@ -821,6 +1110,31 @@ export const Chart: React.FC = () => {
           </div>
         ) : (
           <span className="text-neutral-500 italic text-[11px]">Connecting to XAUUSD feed...</span>
+        )}
+
+        {/* Global Market Session & Open/Close indicator with New York AM/PM */}
+        {activeCandle && (
+          <>
+            <div className="h-4 w-px bg-[#1e273a]" />
+            {(() => {
+              const session = getSessionInfo(activeCandle.timestamp);
+              return session.isMarketOpen ? (
+                <div className="flex items-center space-x-1.5 bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 px-2 py-0.5 rounded text-[10px] font-bold">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>🗽 NY {session.nyTime12}</span>
+                  <span className="text-neutral-400">•</span>
+                  <span className="text-emerald-400">{session.primarySession}</span>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-1.5 bg-rose-500/15 border border-rose-500/40 text-rose-300 px-2 py-0.5 rounded text-[10px] font-bold animate-pulse">
+                  <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                  <span className="text-rose-400">MARKET CLOSED ({session.closeReason})</span>
+                  <span className="text-neutral-400">•</span>
+                  <span>NY {session.nyTime12}</span>
+                </div>
+              );
+            })()}
+          </>
         )}
       </div>
 
@@ -872,6 +1186,75 @@ export const Chart: React.FC = () => {
         </div>
       )}
 
+      {/* Floating Action Context Menu for Selected Drawing (Resize, Move, Delete, Hide, Order, Color) */}
+      {selectedProjected && !isInteractiveToolActive && (
+        <div
+          style={{
+            left: Math.max(16, selectedProjected.anchor.x),
+            top: Math.max(50, selectedProjected.anchor.y - 48),
+          }}
+          className="absolute z-30 flex items-center gap-1.5 bg-[#0f1422]/95 border border-[#2b354d] px-2 py-1.5 rounded-xl shadow-2xl backdrop-blur-md animate-fadeIn select-none"
+        >
+          {/* Hide / Unhide */}
+          <button
+            type="button"
+            onClick={() => toggleHideDrawing(selectedProjected.id)}
+            title={selectedProjected.hidden ? 'Show Drawing' : 'Hide Drawing'}
+            className="p-1 rounded hover:bg-white/10 text-neutral-300 hover:text-white transition-colors cursor-pointer"
+          >
+            <Eye className={`h-3.5 w-3.5 ${selectedProjected.hidden ? 'text-amber-400' : ''}`} />
+          </button>
+
+          {/* Layer Ordering: Send Backward / Bring Forward */}
+          <button
+            type="button"
+            onClick={() => reorderDrawing(selectedProjected.id, 'forward')}
+            title="Bring Forward"
+            className="p-1 rounded hover:bg-white/10 text-neutral-300 hover:text-white transition-colors cursor-pointer"
+          >
+            <ArrowUp className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => reorderDrawing(selectedProjected.id, 'backward')}
+            title="Send Backward"
+            className="p-1 rounded hover:bg-white/10 text-neutral-300 hover:text-white transition-colors cursor-pointer"
+          >
+            <ArrowDown className="h-3.5 w-3.5" />
+          </button>
+
+          <div className="h-4 w-px bg-[#2b354d]" />
+
+          {/* Color Palette Chips */}
+          <div className="flex items-center space-x-1">
+            {['#00d2ff', '#f59e0b', '#089981', '#f23645', '#a855f7', '#ffffff'].map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => updateDrawing(selectedProjected.id, { color: c })}
+                style={{ backgroundColor: c }}
+                title={`Set color ${c}`}
+                className={`w-3.5 h-3.5 rounded-full border border-black/40 hover:scale-125 transition-transform cursor-pointer ${
+                  selectedProjected.color === c ? 'ring-2 ring-white scale-110' : ''
+                }`}
+              />
+            ))}
+          </div>
+
+          <div className="h-4 w-px bg-[#2b354d]" />
+
+          {/* Delete Drawing */}
+          <button
+            type="button"
+            onClick={() => removeDrawing(selectedProjected.id)}
+            title="Delete Drawing [Del]"
+            className="p-1 rounded hover:bg-rose-500/20 text-neutral-300 hover:text-rose-400 transition-colors cursor-pointer"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Order Placement Toast / Notice */}
       {orderNotice && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 bg-emerald-600/90 border border-emerald-400/50 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-2xl backdrop-blur-md flex items-center space-x-2 animate-bounce">
@@ -887,6 +1270,7 @@ export const Chart: React.FC = () => {
       <svg
         aria-label="Interactive Chart Drawings"
         onMouseMove={handleOverlayMouseMove}
+        onMouseUp={handleOverlayMouseUp}
         onMouseLeave={handleOverlayMouseLeave}
         onClick={handleOverlayClick}
         className={`absolute inset-0 w-full h-full z-10 ${
@@ -895,16 +1279,23 @@ export const Chart: React.FC = () => {
       >
         {/* Render Saved Drawings from pre-computed projected state */}
         {projectedDrawings.map((d) => {
+          if (d.hidden) return null;
+          const isSelected = d.id === selectedDrawingId;
+
           if (d.type === 'horizontal_line' && d.y !== undefined && d.price !== undefined) {
             return (
-              <g key={d.id} className="pointer-events-auto group">
+              <g
+                key={d.id}
+                className="pointer-events-auto group cursor-ns-resize"
+                onMouseDown={(e) => startDrag(e, d.id, 'move')}
+              >
                 <line
                   x1="0"
                   y1={d.y}
                   x2="100%"
                   y2={d.y}
                   stroke={d.color || '#38bdf8'}
-                  strokeWidth="1.5"
+                  strokeWidth={isSelected ? '2.5' : '1.5'}
                   strokeDasharray="4 3"
                 />
                 <rect
@@ -914,8 +1305,8 @@ export const Chart: React.FC = () => {
                   height="20"
                   rx="4"
                   fill="#10141f"
-                  stroke={d.color || '#38bdf8'}
-                  strokeWidth="1"
+                  stroke={isSelected ? '#ffffff' : (d.color || '#38bdf8')}
+                  strokeWidth={isSelected ? '2' : '1'}
                 />
                 <text
                   x="45"
@@ -927,72 +1318,204 @@ export const Chart: React.FC = () => {
                 >
                   {d.price.toFixed(2)}
                 </text>
-                <circle
-                  cx="100"
-                  cy={d.y}
-                  r="7"
-                  className="fill-rose-500/80 hover:fill-rose-600 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeDrawing(d.id);
-                  }}
-                />
               </g>
             );
           }
 
           if (d.type === 'trendline' && d.p1 && d.p2) {
             return (
-              <g key={d.id} className="pointer-events-auto group">
+              <g
+                key={d.id}
+                className="pointer-events-auto group"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedDrawingId(d.id);
+                }}
+              >
+                {/* Thick invisible hover area for line body dragging */}
+                <line
+                  x1={d.p1.x}
+                  y1={d.p1.y}
+                  x2={d.p2.x}
+                  y2={d.p2.y}
+                  stroke="transparent"
+                  strokeWidth="12"
+                  className="cursor-move"
+                  onMouseDown={(e) => startDrag(e, d.id, 'move')}
+                />
                 <line
                   x1={d.p1.x}
                   y1={d.p1.y}
                   x2={d.p2.x}
                   y2={d.p2.y}
                   stroke={d.color || '#00d2ff'}
-                  strokeWidth="2"
+                  strokeWidth={isSelected ? '2.5' : '2'}
                 />
-                <circle cx={d.p1.x} cy={d.p1.y} r="3.5" fill={d.color || '#00d2ff'} />
-                <circle cx={d.p2.x} cy={d.p2.y} r="3.5" fill={d.color || '#00d2ff'} />
+                {/* Point 1 Resize Handle */}
+                <circle
+                  cx={d.p1.x}
+                  cy={d.p1.y}
+                  r={isSelected ? '5.5' : '3.5'}
+                  fill={isSelected ? '#ffffff' : (d.color || '#00d2ff')}
+                  stroke="#10141f"
+                  strokeWidth="1.5"
+                  className="cursor-grab hover:scale-125"
+                  onMouseDown={(e) => startDrag(e, d.id, 'resize', 'p1')}
+                />
+                {/* Point 2 Resize Handle */}
+                <circle
+                  cx={d.p2.x}
+                  cy={d.p2.y}
+                  r={isSelected ? '5.5' : '3.5'}
+                  fill={isSelected ? '#ffffff' : (d.color || '#00d2ff')}
+                  stroke="#10141f"
+                  strokeWidth="1.5"
+                  className="cursor-grab hover:scale-125"
+                  onMouseDown={(e) => startDrag(e, d.id, 'resize', 'p2')}
+                />
               </g>
             );
           }
 
-          if (d.type === 'rectangle' && d.rect) {
+          if (d.type === 'rectangle' && d.rect && d.corners) {
             return (
-              <g key={d.id} className="pointer-events-auto">
+              <g
+                key={d.id}
+                className="pointer-events-auto"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedDrawingId(d.id);
+                }}
+              >
+                {/* Rectangle Body (Drag to move) */}
                 <rect
                   x={d.rect.x}
                   y={d.rect.y}
                   width={d.rect.width}
                   height={d.rect.height}
-                  fill="rgba(245, 158, 11, 0.12)"
+                  fill="rgba(245, 158, 11, 0.15)"
                   stroke={d.color || '#f59e0b'}
-                  strokeWidth="1.5"
+                  strokeWidth={isSelected ? '2.5' : '1.5'}
+                  strokeDasharray={isSelected ? '4 2' : undefined}
+                  className="cursor-move"
+                  onMouseDown={(e) => startDrag(e, d.id, 'move')}
                 />
+
+                {/* 4 Corner Resize Handles when Selected */}
+                {isSelected && (
+                  <>
+                    <circle
+                      cx={d.corners.tl.x}
+                      cy={d.corners.tl.y}
+                      r="5.5"
+                      fill="#ffffff"
+                      stroke="#f59e0b"
+                      strokeWidth="2"
+                      className="cursor-nwse-resize hover:scale-125"
+                      onMouseDown={(e) => startDrag(e, d.id, 'resize', 'tl')}
+                    />
+                    <circle
+                      cx={d.corners.tr.x}
+                      cy={d.corners.tr.y}
+                      r="5.5"
+                      fill="#ffffff"
+                      stroke="#f59e0b"
+                      strokeWidth="2"
+                      className="cursor-nesw-resize hover:scale-125"
+                      onMouseDown={(e) => startDrag(e, d.id, 'resize', 'tr')}
+                    />
+                    <circle
+                      cx={d.corners.br.x}
+                      cy={d.corners.br.y}
+                      r="5.5"
+                      fill="#ffffff"
+                      stroke="#f59e0b"
+                      strokeWidth="2"
+                      className="cursor-nwse-resize hover:scale-125"
+                      onMouseDown={(e) => startDrag(e, d.id, 'resize', 'br')}
+                    />
+                    <circle
+                      cx={d.corners.bl.x}
+                      cy={d.corners.bl.y}
+                      r="5.5"
+                      fill="#ffffff"
+                      stroke="#f59e0b"
+                      strokeWidth="2"
+                      className="cursor-nesw-resize hover:scale-125"
+                      onMouseDown={(e) => startDrag(e, d.id, 'resize', 'bl')}
+                    />
+                  </>
+                )}
               </g>
             );
           }
 
-          if (d.type === 'circle' && d.circle) {
+          if (d.type === 'circle' && d.circle && d.centerHandle && d.edgeHandle) {
             return (
-              <g key={d.id} className="pointer-events-auto">
+              <g
+                key={d.id}
+                className="pointer-events-auto"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedDrawingId(d.id);
+                }}
+              >
+                {/* Circle Body (Drag to move) */}
                 <ellipse
                   cx={d.circle.cx}
                   cy={d.circle.cy}
                   rx={d.circle.radius}
                   ry={d.circle.radius}
-                  fill="rgba(168, 85, 247, 0.12)"
+                  fill="rgba(168, 85, 247, 0.15)"
                   stroke={d.color || '#a855f7'}
-                  strokeWidth="1.5"
+                  strokeWidth={isSelected ? '2.5' : '1.5'}
+                  className="cursor-move"
+                  onMouseDown={(e) => startDrag(e, d.id, 'move')}
                 />
+
+                {/* Handles when Selected */}
+                {isSelected && (
+                  <>
+                    {/* Center Move Handle */}
+                    <circle
+                      cx={d.centerHandle.x}
+                      cy={d.centerHandle.y}
+                      r="5.5"
+                      fill="#ffffff"
+                      stroke="#a855f7"
+                      strokeWidth="2"
+                      className="cursor-move hover:scale-125"
+                      onMouseDown={(e) => startDrag(e, d.id, 'resize', 'center')}
+                    />
+                    {/* Perimeter Radius Resize Handle */}
+                    <circle
+                      cx={d.edgeHandle.x}
+                      cy={d.edgeHandle.y}
+                      r="5.5"
+                      fill="#a855f7"
+                      stroke="#ffffff"
+                      strokeWidth="2"
+                      className="cursor-ew-resize hover:scale-125"
+                      onMouseDown={(e) => startDrag(e, d.id, 'resize', 'edge')}
+                    />
+                  </>
+                )}
               </g>
             );
           }
 
           if (d.type === 'text' && d.text) {
             return (
-              <g key={d.id} transform={`translate(${d.text.x}, ${d.text.y})`} className="pointer-events-auto group">
+              <g
+                key={d.id}
+                transform={`translate(${d.text.x}, ${d.text.y})`}
+                className="pointer-events-auto group cursor-move"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedDrawingId(d.id);
+                }}
+                onMouseDown={(e) => startDrag(e, d.id, 'move')}
+              >
                 <rect
                   x="0"
                   y="-18"
@@ -1000,8 +1523,8 @@ export const Chart: React.FC = () => {
                   height="22"
                   rx="4"
                   fill="#161b26"
-                  stroke={d.color || '#fde047'}
-                  strokeWidth="1"
+                  stroke={isSelected ? '#ffffff' : (d.color || '#fde047')}
+                  strokeWidth={isSelected ? '2' : '1'}
                 />
                 <text x="8" y="-3" fill="#ffffff" fontSize="11" fontWeight="600">
                   {d.text.text}
@@ -1015,7 +1538,14 @@ export const Chart: React.FC = () => {
             const pos = d.position;
 
             return (
-              <g key={d.id} className="pointer-events-auto">
+              <g
+                key={d.id}
+                className="pointer-events-auto"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedDrawingId(d.id);
+                }}
+              >
                 {/* Green Target Zone */}
                 <rect
                   x={pos.startX}
@@ -1024,7 +1554,7 @@ export const Chart: React.FC = () => {
                   height={pos.targetZoneHeight}
                   fill="rgba(8, 153, 129, 0.22)"
                   stroke="#089981"
-                  strokeWidth="1.5"
+                  strokeWidth={isSelected ? '2' : '1.5'}
                 />
 
                 {/* Red Stop Loss Zone */}
@@ -1035,10 +1565,10 @@ export const Chart: React.FC = () => {
                   height={pos.stopZoneHeight}
                   fill="rgba(242, 54, 69, 0.22)"
                   stroke="#f23645"
-                  strokeWidth="1.5"
+                  strokeWidth={isSelected ? '2' : '1.5'}
                 />
 
-                {/* Center Entry Line */}
+                {/* Center Entry Line (Draggable to move entry) */}
                 <line
                   x1={pos.startX}
                   y1={pos.entryY}
@@ -1073,6 +1603,45 @@ export const Chart: React.FC = () => {
                   SL: {pos.slPrice.toFixed(2)} (-${pos.riskPts.toFixed(2)})
                 </text>
 
+                {/* Interactive Resize Handles when Selected */}
+                {isSelected && (
+                  <>
+                    {/* TP Handle (Drag to adjust Take Profit) */}
+                    <circle
+                      cx={pos.tpHandle.x}
+                      cy={pos.tpHandle.y}
+                      r="5.5"
+                      fill="#089981"
+                      stroke="#ffffff"
+                      strokeWidth="2"
+                      className="cursor-ns-resize hover:scale-125"
+                      onMouseDown={(e) => startDrag(e, d.id, 'resize', 'tp')}
+                    />
+                    {/* SL Handle (Drag to adjust Stop Loss) */}
+                    <circle
+                      cx={pos.slHandle.x}
+                      cy={pos.slHandle.y}
+                      r="5.5"
+                      fill="#f23645"
+                      stroke="#ffffff"
+                      strokeWidth="2"
+                      className="cursor-ns-resize hover:scale-125"
+                      onMouseDown={(e) => startDrag(e, d.id, 'resize', 'sl')}
+                    />
+                    {/* Right Handle (Drag to adjust Width / Target Time) */}
+                    <circle
+                      cx={pos.rightHandle.x}
+                      cy={pos.rightHandle.y}
+                      r="5.5"
+                      fill="#ffffff"
+                      stroke="#1e273a"
+                      strokeWidth="2"
+                      className="cursor-ew-resize hover:scale-125"
+                      onMouseDown={(e) => startDrag(e, d.id, 'resize', 'right')}
+                    />
+                  </>
+                )}
+
                 {/* R:R Ratio Badge & Execute Button on Box */}
                 <foreignObject
                   x={pos.startX + 4}
@@ -1089,7 +1658,7 @@ export const Chart: React.FC = () => {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleExecutePositionOrder(pos.raw);
+                        handleExecutePositionOrder(pos.rawPos);
                       }}
                       title="Place simulated order with these SL/TP levels"
                       className={`flex items-center space-x-1 px-1.5 py-0.2 rounded font-bold text-white transition-all cursor-pointer ${

@@ -13,6 +13,7 @@ import {
   Radio,
 } from 'lucide-react';
 import { PlaybackSpeed } from '@/types';
+import { getSessionInfo } from '@/lib/utils/sessions';
 
 export const ReplayToolbar: React.FC = () => {
   const candles = useTradingSimulatorStore((s) => s.candles);
@@ -47,15 +48,13 @@ export const ReplayToolbar: React.FC = () => {
     }
   };
 
-  const formatUtcTime = (timestamp?: number) => {
-    if (!timestamp) return '--:--:--';
-    const d = new Date(timestamp * 1000);
-    return d.toISOString().replace('T', ' ').substring(11, 19);
-  };
+  // Calculate active session and New York time with AM/PM
+  const currentTimestamp = currentCandle ? currentCandle.timestamp : 0;
+  const session = getSessionInfo(currentTimestamp);
 
   return (
     <div className="flex flex-col md:flex-row items-center justify-between gap-3 border-b border-[#1c2230] bg-[#0d1017]/95 px-4 py-2 text-neutral-200">
-      {/* Primary Deck */}
+      {/* Primary Deck: Playback controls or Live Mode Switch */}
       <div className="flex items-center space-x-2.5">
         {isLiveMode ? (
           /* Live Market Status & Bar Replay Cut Trigger */
@@ -170,12 +169,13 @@ export const ReplayToolbar: React.FC = () => {
         )}
       </div>
 
-      {/* Scrubber Timeline Slider (Always accessible to navigate historical candles) */}
-      <div className="flex flex-1 items-center space-x-3 w-full md:w-auto px-2 min-w-[240px] max-w-xl">
+      {/* Center: Scrubber Timeline Slider & Session Indicator Group */}
+      <div className="flex flex-1 items-center space-x-3 w-full md:w-auto px-2 min-w-[280px] max-w-2xl">
         <span className="font-mono text-xs text-neutral-400 tabular-nums">
           {currentIndex >= 0 ? `${currentIndex + 1}` : '0'}/{total}
         </span>
 
+        {/* Scrubber Range Input */}
         <div className="relative flex-1 flex items-center">
           <input
             type="range"
@@ -189,13 +189,62 @@ export const ReplayToolbar: React.FC = () => {
           />
         </div>
 
-        <span className="font-mono text-xs font-semibold text-neutral-200 tabular-nums bg-[#10141f] border border-[#1e2638] px-2 py-0.5 rounded">
-          {currentCandle ? formatUtcTime(currentCandle.timestamp) : '--:--:--'}
-        </span>
+        {/* Group-wise Market Session & New York AM/PM Time Readout */}
+        <div className="flex items-center space-x-2 shrink-0">
+          {currentCandle ? (
+            <>
+              {/* Market Status & Active Session Pill */}
+              {session.isMarketOpen ? (
+                <span className="flex items-center space-x-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/40 px-2.5 py-1 text-[11px] font-bold text-emerald-400 font-mono">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>{session.primarySession}</span>
+                </span>
+              ) : (
+                <span className="flex items-center space-x-1.5 rounded-lg bg-rose-500/15 border border-rose-500/40 px-2.5 py-1 text-[11px] font-bold text-rose-400 font-mono animate-pulse">
+                  <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                  <span>CLOSED ({session.closeReason})</span>
+                </span>
+              )}
+
+              {/* New York AM/PM Time Badge */}
+              <div className="font-mono text-xs font-semibold text-neutral-100 tabular-nums bg-[#10141f] border border-[#1e2638] px-2.5 py-1 rounded-lg flex items-center space-x-1.5 shadow-sm">
+                <span className="text-[10px] text-amber-400 font-bold">🗽 NY</span>
+                <span className="font-bold text-white tracking-wide">{session.nyTime12}</span>
+                <span className="text-[10px] text-neutral-400 hidden lg:inline-block">({session.weekday})</span>
+              </div>
+            </>
+          ) : (
+            <span className="font-mono text-xs text-neutral-500 tabular-nums bg-[#10141f] border border-[#1e2638] px-2.5 py-1 rounded-lg">
+              --:-- --
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Right status badge */}
-      <div className="flex items-center space-x-2 text-xs">
+      {/* Right: Global Sessions Chips (Sydney, Tokyo, London, New York) */}
+      <div className="flex items-center space-x-2 text-xs shrink-0">
+        {session.sessions.length > 0 && (
+          <div className="hidden 2xl:flex items-center space-x-1 bg-[#10141f] border border-[#1e2638] p-0.5 rounded-lg text-[10px]">
+            {session.sessions.map((s) => (
+              <span
+                key={s.id}
+                title={`${s.name} (${s.hoursNy} NY)`}
+                className={`px-1.5 py-0.5 rounded font-mono font-semibold flex items-center space-x-1 transition-all ${
+                  s.isOpen
+                    ? s.id === 'new_york'
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold shadow-sm shadow-amber-950/40'
+                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold shadow-sm shadow-emerald-950/40'
+                    : 'text-neutral-500 opacity-60'
+                }`}
+              >
+                <span>{s.icon}</span>
+                <span>{s.shortName}</span>
+                {s.isOpen && <span className="h-1 w-1 rounded-full bg-emerald-400 animate-pulse" />}
+              </span>
+            ))}
+          </div>
+        )}
+
         {isEnded ? (
           <span className="flex items-center space-x-1 rounded-lg bg-amber-500/15 border border-amber-500/40 px-2.5 py-1 text-xs font-semibold text-amber-400 animate-pulse">
             <AlertCircle className="h-3.5 w-3.5" />
@@ -203,7 +252,7 @@ export const ReplayToolbar: React.FC = () => {
           </span>
         ) : (
           <span className="rounded bg-[#10141f] border border-[#1e2638] px-2 py-1 text-[11px] font-mono text-neutral-400">
-            {currentTimeframe.toUpperCase()} Candles ({isLiveMode ? 'Real-Time' : 'Historical Slice'})
+            {currentTimeframe.toUpperCase()} Candles
           </span>
         )}
       </div>

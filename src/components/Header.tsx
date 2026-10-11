@@ -3,6 +3,7 @@
 import React from 'react';
 import { useTradingSimulatorStore } from '@/stores/useTradingSimulatorStore';
 import { Calendar, Clock, Database, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react';
+import { getSessionInfo } from '@/lib/utils/sessions';
 
 interface HeaderProps {
   onOpenDataSelector: () => void;
@@ -19,12 +20,6 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDataSelector }) => {
   const changeTimeframe = useTradingSimulatorStore((s) => s.changeTimeframe);
   const isLoadingData = useTradingSimulatorStore((s) => s.isLoadingData);
   const isLiveMode = useTradingSimulatorStore((s) => s.isLiveMode);
-
-  const formatUtcClock = (timestamp?: number) => {
-    if (!timestamp) return '----:--:-- --:--:-- UTC';
-    const d = new Date(timestamp * 1000);
-    return d.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
-  };
 
   // Price calculations
   const firstCandle = candles[0];
@@ -111,26 +106,46 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDataSelector }) => {
         </div>
       </div>
 
-      {/* Center: High Visibility Virtual / Live Market Clock */}
-      <div className="hidden md:flex items-center space-x-3 rounded-lg border border-[#1e2638] bg-[#10141f] px-3.5 py-1 shadow-inner">
-        <Clock className={`h-4 w-4 ${isLiveMode ? 'text-emerald-400 animate-pulse' : (replayStatus === 'playing' ? 'text-emerald-400 animate-pulse' : 'text-neutral-400')}`} />
-        <div className="flex flex-col">
-          <div className="flex items-center justify-between text-[9px] font-semibold uppercase tracking-wider text-neutral-400">
-            <span>{isLiveMode ? 'Live Market Clock' : 'Simulated Market Clock'}</span>
-            <span className={isLiveMode ? 'text-emerald-400 font-mono' : 'text-amber-400 font-mono'}>
-              {isLiveMode ? '● REAL-TIME' : `${progressPercent}% completed`}
-            </span>
+      {/* Center: High Visibility New York Market & Session Clock */}
+      {(() => {
+        const session = getSessionInfo(currentCandle?.timestamp || 0);
+        return (
+          <div className="hidden md:flex items-center space-x-3 rounded-lg border border-[#1e2638] bg-[#10141f] px-3.5 py-1 shadow-inner">
+            <Clock
+              className={`h-4 w-4 ${
+                session.isMarketOpen ? 'text-emerald-400 animate-pulse' : 'text-rose-400 animate-pulse'
+              }`}
+            />
+            <div className="flex flex-col">
+              <div className="flex items-center justify-between text-[9px] font-semibold uppercase tracking-wider text-neutral-400 gap-3">
+                <span>{session.isMarketOpen ? 'NY Market Clock' : 'Market Closed'}</span>
+                {session.isMarketOpen ? (
+                  <span className="text-emerald-400 font-mono font-bold">
+                    ● {session.primarySession}
+                  </span>
+                ) : (
+                  <span className="text-rose-400 font-mono font-bold">
+                    🔴 {session.closeReason}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="font-mono text-xs font-bold tracking-tight text-white tabular-nums">
+                  {currentCandle ? session.nyFullDisplay : '--:-- --'}
+                </span>
+                <span className="text-[10px] font-mono text-neutral-500">
+                  ({isLiveMode ? 'Real-Time' : `${progressPercent}%`})
+                </span>
+              </div>
+            </div>
+            {totalCandles > 0 && (
+              <span className="text-[10px] font-mono text-neutral-400 bg-[#161d2d] px-1.5 py-0.5 rounded">
+                {currentIndex + 1}/{totalCandles}
+              </span>
+            )}
           </div>
-          <span className="font-mono text-xs font-bold tracking-tight text-white tabular-nums">
-            {formatUtcClock(currentCandle?.timestamp)}
-          </span>
-        </div>
-        {totalCandles > 0 && (
-          <span className="text-[10px] font-mono text-neutral-400 bg-[#161d2d] px-1.5 py-0.5 rounded">
-            {currentIndex + 1}/{totalCandles}
-          </span>
-        )}
-      </div>
+        );
+      })()}
 
       {/* Right: Dataset Stats & Actions */}
       <div className="flex items-center space-x-3 text-xs">

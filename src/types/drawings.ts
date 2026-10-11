@@ -18,6 +18,7 @@ export interface DrawingBase {
   id: string;
   type: ToolType;
   color?: string;
+  hidden?: boolean;
 }
 
 export interface TrendlineDrawing extends DrawingBase {

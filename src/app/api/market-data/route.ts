@@ -51,6 +51,28 @@ export async function GET(request: NextRequest): Promise<NextResponse<MarketData
       });
     }
 
+    // Dynamic historical backwards pagination (infinite scrollback)
+    const olderThanParam = searchParams.get('olderThan');
+    if (olderThanParam) {
+      const endTimestamp = parseInt(olderThanParam, 10);
+      if (isNaN(endTimestamp)) {
+        return NextResponse.json(
+          { success: false, error: 'Invalid "olderThan" timestamp.' },
+          { status: 400 }
+        );
+      }
+      const limit = parseInt(searchParams.get('limit') || '1000', 10);
+      const provider = getMarketDataProvider(providerParam);
+      let candles: Candle[] = [];
+      if (provider.fetchOlderCandles) {
+        candles = await provider.fetchOlderCandles(endTimestamp, timeframeParam, limit);
+      }
+      return NextResponse.json({
+        success: true,
+        candles,
+      });
+    }
+
     if (!startTimeParam || !endTimeParam) {
       return NextResponse.json(
         {
