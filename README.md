@@ -164,3 +164,18 @@ All 30 unit tests cover:
 bun run build
 bun run start
 ```
+
+### Deploying with GitHub Actions
+
+The `Deploy to Vercel` workflow deploys production on pushes to `main`. It can
+also be run manually from the GitHub Actions tab. Add these repository secrets
+under **Settings → Secrets and variables → Actions**:
+
+- `VERCEL_TOKEN`: a Vercel access token.
+- `VERCEL_ORG_ID`: the Vercel team or account ID.
+- `VERCEL_PROJECT_ID`: the ID of the existing AuTick Vercel project.
+
+You can find the project and organization IDs in `.vercel/project.json` after
+linking this repository with `vercel link`. In the Vercel project settings, make
+sure `autick.vercel.app` is assigned as a production domain. Vercel applies the
+project's production domains to deployments made with `--prod`.
