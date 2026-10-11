@@ -171,6 +171,7 @@ export const Chart: React.FC = () => {
 
   // Track prev index to decide whether to update single candle or setData
   const prevIndexRef = useRef<number>(-1);
+  const replayAnimationFrameRef = useRef<number | null>(null);
 
   // Hovered candle for OHLC legend
   const [hoveredCandle, setHoveredCandle] = useState<Candle | null>(null);
@@ -362,6 +363,11 @@ export const Chart: React.FC = () => {
     resizeObserver.observe(containerRef.current);
 
     return () => {
+      if (replayAnimationFrameRef.current !== null) {
+        cancelAnimationFrame(replayAnimationFrameRef.current);
+        replayAnimationFrameRef.current = null;
+      }
+
       resizeObserver.disconnect();
       chart.timeScale().unsubscribeVisibleTimeRangeChange(triggerRerender);
       chart.remove();
@@ -380,6 +386,10 @@ export const Chart: React.FC = () => {
     if (!series) return;
 
     if (candles.length === 0 || currentIndex < 0) {
+      if (replayAnimationFrameRef.current !== null) {
+        cancelAnimationFrame(replayAnimationFrameRef.current);
+        replayAnimationFrameRef.current = null;
+      }
       series.setData([]);
       prevIndexRef.current = -1;
       return;
@@ -389,15 +399,44 @@ export const Chart: React.FC = () => {
     const isSingleStepForward = currentIndex === prevIndex + 1 && prevIndex >= 0;
 
     if (isSingleStepForward) {
-      // Incremental update for single candle step
+      const previousCandle = candles[currentIndex - 1];
       const nextCandle = candles[currentIndex];
-      series.update({
-        time: nextCandle.timestamp as UTCTimestamp,
-        open: nextCandle.open,
-        high: nextCandle.high,
-        low: nextCandle.low,
-        close: nextCandle.close,
-      });
+      const durationMs = 220;
+      const startTime = performance.now();
+
+      if (replayAnimationFrameRef.current !== null) {
+        cancelAnimationFrame(replayAnimationFrameRef.current);
+      }
+
+      const animateCandle = (now: number) => {
+        const elapsed = now - startTime;
+        const progress = Math.min(elapsed / durationMs, 1);
+        const eased = 1 - (1 - progress) ** 3;
+
+        series.update({
+          time: nextCandle.timestamp as UTCTimestamp,
+          open: previousCandle.open + (nextCandle.open - previousCandle.open) * eased,
+          high: previousCandle.high + (nextCandle.high - previousCandle.high) * eased,
+          low: previousCandle.low + (nextCandle.low - previousCandle.low) * eased,
+          close: previousCandle.close + (nextCandle.close - previousCandle.close) * eased,
+        });
+
+        if (progress < 1) {
+          replayAnimationFrameRef.current = requestAnimationFrame(animateCandle);
+          return;
+        }
+
+        series.update({
+          time: nextCandle.timestamp as UTCTimestamp,
+          open: nextCandle.open,
+          high: nextCandle.high,
+          low: nextCandle.low,
+          close: nextCandle.close,
+        });
+        replayAnimationFrameRef.current = null;
+      };
+
+      replayAnimationFrameRef.current = requestAnimationFrame(animateCandle);
     } else {
       // Re-set entire visible slice on jump, reset, cut, or older data prepended
       const visible = candles.slice(0, currentIndex + 1).map((c) => ({
@@ -407,6 +446,10 @@ export const Chart: React.FC = () => {
         low: c.low,
         close: c.close,
       }));
+      if (replayAnimationFrameRef.current !== null) {
+        cancelAnimationFrame(replayAnimationFrameRef.current);
+        replayAnimationFrameRef.current = null;
+      }
       series.setData(visible);
     }
 
