@@ -45,6 +45,12 @@ interface TradingSimulatorState {
   activeTool: ToolType;
   drawings: Drawing[];
   selectedDrawingId: string | null;
+  orderPreview: {
+    side: Position['side'];
+    quantity: number;
+    stopLoss?: number;
+    takeProfit?: number;
+  } | null;
 
   // Internal Engine instances
   replayEngine: ReplayEngine;
@@ -74,6 +80,7 @@ interface TradingSimulatorState {
   setActiveTool: (tool: ToolType) => void;
   setSelectedDrawingId: (id: string | null) => void;
   addDrawing: (drawing: Drawing) => void;
+  setOrderPreview: (preview: TradingSimulatorState['orderPreview']) => void;
   updateDrawing: (id: string, updates: Partial<Drawing>) => void;
   moveDrawing: (id: string, deltaPrice: number, deltaTime: number) => void;
   reorderDrawing: (id: string, direction: 'forward' | 'backward') => void;
@@ -147,6 +154,7 @@ export const useTradingSimulatorStore = create<TradingSimulatorState>((set, get)
     activeTool: 'cursor',
     drawings: [],
     selectedDrawingId: null,
+    orderPreview: null,
 
     replayEngine: initialReplayEngine,
     tradingEngine: initialTradingEngine,
@@ -474,6 +482,8 @@ export const useTradingSimulatorStore = create<TradingSimulatorState>((set, get)
         selectedDrawingId: drawing.id,
       }));
     },
+
+    setOrderPreview: (orderPreview) => set({ orderPreview }),
 
     updateDrawing: (id: string, updates: Partial<Drawing>) => {
       set((state) => ({

@@ -106,7 +106,7 @@ export default function Home() {
         </div>
 
         {/* Right Stage: Trading Desk (Order Placement & Position Spotlight) */}
-        <div className="w-full lg:w-92 xl:w-96 shrink-0 h-auto lg:h-full overflow-y-auto bg-[#0a0d14]">
+        <div className="w-full shrink-0 h-auto overflow-y-auto bg-[#0a0d14] lg:h-full lg:w-72 xl:w-80">
           <TradePanel />
         </div>
       </div>

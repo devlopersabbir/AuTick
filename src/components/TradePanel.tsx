@@ -26,6 +26,8 @@ export const TradePanel: React.FC = () => {
   const openOrder = useTradingSimulatorStore((s) => s.openOrder);
   const closeCurrentPosition = useTradingSimulatorStore((s) => s.closeCurrentPosition);
   const clearErrors = useTradingSimulatorStore((s) => s.clearErrors);
+  const addDrawing = useTradingSimulatorStore((s) => s.addDrawing);
+  const setOrderPreview = useTradingSimulatorStore((s) => s.setOrderPreview);
 
   // Form states
   const [selectedSide, setSelectedSide] = useState<PositionSide>('LONG');
@@ -33,6 +35,40 @@ export const TradePanel: React.FC = () => {
   const [stopLoss, setStopLoss] = useState<string>('');
   const [takeProfit, setTakeProfit] = useState<string>('');
   const [formValidationMsg, setFormValidationMsg] = useState<string | null>(null);
+
+  const updateOrderPreview = (
+    side: PositionSide = selectedSide,
+    qtyValue: string = quantity,
+    slValue: string = stopLoss,
+    tpValue: string = takeProfit,
+  ) => {
+    const parseOptionalPrice = (value: string) => {
+      if (!value.trim()) return undefined;
+      const parsed = Number.parseFloat(value);
+      return Number.isFinite(parsed) ? parsed : undefined;
+    };
+    const parsedQuantity = Number.parseFloat(qtyValue);
+    const parsedStopLoss = parseOptionalPrice(slValue);
+    const parsedTakeProfit = parseOptionalPrice(tpValue);
+    const isValidRiskSide = currentPrice > 0 &&
+      (side === 'LONG'
+        ? (parsedStopLoss === undefined || parsedStopLoss < currentPrice) &&
+          (parsedTakeProfit === undefined || parsedTakeProfit > currentPrice)
+        : (parsedStopLoss === undefined || parsedStopLoss > currentPrice) &&
+          (parsedTakeProfit === undefined || parsedTakeProfit < currentPrice));
+
+    if (!isValidRiskSide) {
+      setOrderPreview(null);
+      return;
+    }
+
+    setOrderPreview({
+      side,
+      quantity: Number.isFinite(parsedQuantity) && parsedQuantity > 0 ? parsedQuantity : 1,
+      stopLoss: parsedStopLoss,
+      takeProfit: parsedTakeProfit,
+    });
+  };
 
   const currentPrice = currentCandle ? currentCandle.close : 0;
   const isPositionOpen = openPosition !== null;
@@ -117,9 +153,21 @@ export const TradePanel: React.FC = () => {
     });
 
     if (ok) {
+      if (currentCandle && sl !== undefined && tp !== undefined) {
+        addDrawing({
+          id: crypto.randomUUID(),
+          type: selectedSide === 'LONG' ? 'long_position' : 'short_position',
+          entryPoint: { time: currentCandle.timestamp, price: currentPrice },
+          stopLossPrice: sl,
+          takeProfitPrice: tp,
+          quantity: qty,
+          targetTime: currentCandle.timestamp + 25 * 60,
+        });
+      }
       setStopLoss('');
       setTakeProfit('');
       setFormValidationMsg(null);
+      setOrderPreview(null);
     }
   };
 
@@ -157,9 +205,9 @@ export const TradePanel: React.FC = () => {
   }
 
   return (
-    <div className="flex h-full flex-col gap-5 overflow-y-auto border-l border-[#252c36] bg-[#101318] p-5 text-neutral-100">
+    <div className="flex h-full flex-col gap-3 overflow-y-auto border-l border-[#252c36] bg-[#101318] p-3 text-neutral-100">
       {/* Account Performance HUD Card */}
-      <div className="space-y-4 rounded-md border border-[#303844] bg-[#151a20] p-4">
+      <div className="space-y-3 rounded-md border border-[#303844] bg-[#151a20] p-3">
         <div className="flex items-center justify-between text-neutral-400">
           <div className="flex items-center gap-2 text-sm font-semibold text-neutral-200">
             <Wallet className="h-4 w-4 text-[#d6aa5b]" />
@@ -171,15 +219,15 @@ export const TradePanel: React.FC = () => {
         </div>
 
         {/* Equity & Balance Big Numbers */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-md border border-[#29313b] bg-[#101419] p-3">
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-md border border-[#29313b] bg-[#101419] p-2.5">
             <span className="mb-1 block text-xs font-medium text-neutral-400">Net Equity</span>
             <div className={`font-mono text-lg font-semibold tabular-nums ${equity >= balance ? 'text-emerald-300' : 'text-rose-300'}`}>
               ${equity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           </div>
 
-          <div className="rounded-md border border-[#29313b] bg-[#101419] p-3">
+          <div className="rounded-md border border-[#29313b] bg-[#101419] p-2.5">
             <span className="mb-1 block text-xs font-medium text-neutral-400">Cash Balance</span>
             <div className="font-mono text-lg font-semibold text-white tabular-nums">
               ${balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -213,7 +261,7 @@ export const TradePanel: React.FC = () => {
 
       {/* Active Position Spotlight Card */}
       {isPositionOpen && openPosition ? (
-        <div className="space-y-4 rounded-md border border-[#3a453f] bg-[#151b1a] p-4">
+        <div className="space-y-3 rounded-md border border-[#3a453f] bg-[#151b1a] p-3">
           <div className="flex items-center justify-between border-b border-[#222b3d] pb-2.5">
             <div className="flex items-center space-x-2">
               <span className={`px-2.5 py-0.5 rounded-md text-xs font-extrabold uppercase tracking-wide flex items-center space-x-1 ${
@@ -250,15 +298,15 @@ export const TradePanel: React.FC = () => {
 
           {/* Position Parameters */}
           <div className="grid grid-cols-2 gap-2 text-sm font-mono tabular-nums">
-            <div className="rounded bg-[#101419] p-3">
+            <div className="rounded bg-[#101419] p-2.5">
               <span className="mb-1 block text-xs text-neutral-500">Entry Price</span>
               <span className="text-neutral-200 font-semibold">${openPosition.entryPrice.toFixed(2)}</span>
             </div>
-            <div className="rounded bg-[#101419] p-3">
+            <div className="rounded bg-[#101419] p-2.5">
               <span className="mb-1 block text-xs text-neutral-500">Market Price</span>
               <span className="text-white font-bold">${openPosition.currentPrice.toFixed(2)}</span>
             </div>
-            <div className="rounded bg-[#101419] p-3">
+            <div className="rounded bg-[#101419] p-2.5">
               <span className="mb-1 flex items-center gap-1 text-xs text-neutral-500">
                 <Shield className="h-3 w-3 text-rose-400" /> Stop Loss
               </span>
@@ -266,7 +314,7 @@ export const TradePanel: React.FC = () => {
                 {openPosition.stopLoss ? `$${openPosition.stopLoss.toFixed(2)}` : 'None'}
               </span>
             </div>
-            <div className="rounded bg-[#101419] p-3">
+            <div className="rounded bg-[#101419] p-2.5">
               <span className="mb-1 flex items-center gap-1 text-xs text-neutral-500">
                 <Target className="h-3 w-3 text-emerald-400" /> Take Profit
               </span>
@@ -296,7 +344,7 @@ export const TradePanel: React.FC = () => {
           {/* Prominent Close Button */}
           <button
             onClick={() => closeCurrentPosition()}
-            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-rose-700 py-3 text-sm font-semibold text-white transition-colors hover:bg-rose-600 cursor-pointer"
+            className="flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-rose-700 px-2 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-rose-600 cursor-pointer"
           >
             <XCircle className="h-4 w-4" />
             <span>CLOSE POSITION @ MARKET (${openPosition.currentPrice.toFixed(2)})</span>
@@ -305,7 +353,7 @@ export const TradePanel: React.FC = () => {
       ) : null}
 
       {/* Order Placement Terminal Form */}
-      <div className={`space-y-4 rounded-md border border-[#303844] bg-[#151a20] p-4 ${
+      <div className={`space-y-3 rounded-md border border-[#303844] bg-[#151a20] p-3 ${
         isPositionOpen ? 'pointer-events-none opacity-50' : ''
       }`}>
         <div className="flex items-center justify-between border-b border-[#303844] pb-3">
@@ -319,9 +367,12 @@ export const TradePanel: React.FC = () => {
         {/* Big Side Toggle Buttons */}
         <div className="grid grid-cols-2 gap-2.5">
           <button
-            onClick={() => setSelectedSide('LONG')}
+            onClick={() => {
+              setSelectedSide('LONG');
+              updateOrderPreview('LONG');
+            }}
             disabled={isPositionOpen}
-            className={`flex min-h-[76px] flex-col items-center justify-center rounded-md border py-3 text-sm font-semibold transition-colors cursor-pointer ${
+            className={`flex min-h-16 flex-col items-center justify-center rounded-md border py-2 text-sm font-semibold transition-colors cursor-pointer ${
               selectedSide === 'LONG'
                 ? 'border-emerald-600/50 bg-emerald-950/40 text-emerald-300'
                 : 'border-[#303844] bg-[#11151b] text-neutral-400 hover:text-neutral-200'
@@ -337,9 +388,12 @@ export const TradePanel: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setSelectedSide('SHORT')}
+            onClick={() => {
+              setSelectedSide('SHORT');
+              updateOrderPreview('SHORT');
+            }}
             disabled={isPositionOpen}
-            className={`flex min-h-[76px] flex-col items-center justify-center rounded-md border py-3 text-sm font-semibold transition-colors cursor-pointer ${
+            className={`flex min-h-16 flex-col items-center justify-center rounded-md border py-2 text-sm font-semibold transition-colors cursor-pointer ${
               selectedSide === 'SHORT'
                 ? 'border-rose-600/50 bg-rose-950/40 text-rose-300'
                 : 'border-[#303844] bg-[#11151b] text-neutral-400 hover:text-neutral-200'
@@ -369,9 +423,12 @@ export const TradePanel: React.FC = () => {
               step="0.1"
               min="0.1"
               value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
+              onChange={(e) => {
+                setQuantity(e.target.value);
+                updateOrderPreview(selectedSide, e.target.value);
+              }}
               disabled={isPositionOpen}
-              className="w-full rounded-md border border-[#303844] bg-[#11151b] px-3.5 py-3 font-mono text-sm text-white focus:border-[#d6aa5b] focus:outline-none tabular-nums"
+              className="w-full rounded-md border border-[#303844] bg-[#11151b] px-3 py-2.5 font-mono text-sm text-white focus:border-[#d6aa5b] focus:outline-none tabular-nums"
             />
             <span className="absolute right-3 top-2 text-xs font-mono text-neutral-400 font-semibold pointer-events-none">
               oz
@@ -384,7 +441,7 @@ export const TradePanel: React.FC = () => {
                 type="button"
                 onClick={() => setQuantity(q)}
                 disabled={isPositionOpen}
-                className="min-h-9 flex-1 rounded-md border border-[#303844] bg-[#11151b] py-2 text-xs font-mono text-neutral-300 transition-colors hover:bg-[#202630] cursor-pointer"
+                className="min-h-8 flex-1 rounded-md border border-[#303844] bg-[#11151b] py-1.5 text-xs font-mono text-neutral-300 transition-colors hover:bg-[#202630] cursor-pointer"
               >
                 {q}
               </button>
@@ -416,18 +473,25 @@ export const TradePanel: React.FC = () => {
                 : 'Stop Price'
             }
             value={stopLoss}
-            onChange={(e) => setStopLoss(e.target.value)}
+            onChange={(e) => {
+              setStopLoss(e.target.value);
+              updateOrderPreview(selectedSide, quantity, e.target.value, takeProfit);
+            }}
             disabled={isPositionOpen}
-            className="w-full rounded-md border border-[#303844] bg-[#11151b] px-3.5 py-3 font-mono text-sm text-white focus:border-rose-500 focus:outline-none tabular-nums"
+            className="w-full rounded-md border border-[#303844] bg-[#11151b] px-3 py-2.5 font-mono text-sm text-white focus:border-rose-500 focus:outline-none tabular-nums"
           />
           <div className="flex gap-1.5 pt-0.5">
             {[5, 10, 20].map((d) => (
               <button
                 key={d}
                 type="button"
-                onClick={() => applyPresetSl(d)}
+                onClick={() => {
+                  applyPresetSl(d);
+                  const offset = selectedSide === 'LONG' ? -d : d;
+                  updateOrderPreview(selectedSide, quantity, (currentPrice + offset).toFixed(2), takeProfit);
+                }}
                 disabled={isPositionOpen || !currentPrice}
-                className="min-h-9 flex-1 rounded-md border border-[#303844] bg-[#11151b] py-2 text-xs font-mono text-neutral-400 hover:border-rose-500/30 hover:bg-rose-500/10 hover:text-rose-300 transition-colors cursor-pointer"
+                className="min-h-8 flex-1 rounded-md border border-[#303844] bg-[#11151b] py-1.5 text-xs font-mono text-neutral-400 hover:border-rose-500/30 hover:bg-rose-500/10 hover:text-rose-300 transition-colors cursor-pointer"
               >
                 -${d}
               </button>
@@ -459,18 +523,25 @@ export const TradePanel: React.FC = () => {
                 : 'Target Price'
             }
             value={takeProfit}
-            onChange={(e) => setTakeProfit(e.target.value)}
+            onChange={(e) => {
+              setTakeProfit(e.target.value);
+              updateOrderPreview(selectedSide, quantity, stopLoss, e.target.value);
+            }}
             disabled={isPositionOpen}
-            className="w-full rounded-md border border-[#303844] bg-[#11151b] px-3.5 py-3 font-mono text-sm text-white focus:border-emerald-500 focus:outline-none tabular-nums"
+            className="w-full rounded-md border border-[#303844] bg-[#11151b] px-3 py-2.5 font-mono text-sm text-white focus:border-emerald-500 focus:outline-none tabular-nums"
           />
           <div className="flex gap-1.5 pt-0.5">
             {[10, 20, 40].map((d) => (
               <button
                 key={d}
                 type="button"
-                onClick={() => applyPresetTp(d)}
+                onClick={() => {
+                  applyPresetTp(d);
+                  const offset = selectedSide === 'LONG' ? d : -d;
+                  updateOrderPreview(selectedSide, quantity, stopLoss, (currentPrice + offset).toFixed(2));
+                }}
                 disabled={isPositionOpen || !currentPrice}
-                className="min-h-9 flex-1 rounded-md border border-[#303844] bg-[#11151b] py-2 text-xs font-mono text-neutral-400 hover:border-emerald-500/30 hover:bg-emerald-500/10 hover:text-emerald-300 transition-colors cursor-pointer"
+                className="min-h-8 flex-1 rounded-md border border-[#303844] bg-[#11151b] py-1.5 text-xs font-mono text-neutral-400 hover:border-emerald-500/30 hover:bg-emerald-500/10 hover:text-emerald-300 transition-colors cursor-pointer"
               >
                 +${d}
               </button>
@@ -490,7 +561,7 @@ export const TradePanel: React.FC = () => {
         <button
           onClick={handleOpenPosition}
           disabled={isPositionOpen || !currentCandle}
-          className={`flex min-h-12 w-full items-center justify-center gap-2 rounded-md py-3 text-sm font-semibold transition-colors cursor-pointer ${
+          className={`flex min-h-10 w-full items-center justify-center gap-2 rounded-md py-2.5 text-sm font-semibold transition-colors cursor-pointer ${
             selectedSide === 'LONG'
               ? 'bg-emerald-700 text-white hover:bg-emerald-600'
               : 'bg-rose-700 text-white hover:bg-rose-600'

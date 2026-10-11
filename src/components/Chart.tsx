@@ -14,6 +14,7 @@ import {
   Time,
   SeriesMarker,
   TickMarkType,
+  type AutoscaleInfo,
 } from 'lightweight-charts';
 import { useTradingSimulatorStore } from '@/stores/useTradingSimulatorStore';
 import { Candle } from '@/types';
@@ -68,6 +69,7 @@ interface ProjectedDrawing {
   color?: string;
   hidden?: boolean;
   raw: Drawing;
+  preview?: boolean;
 
   // Selected toolbar coordinates
   anchor: { x: number; y: number };
@@ -154,6 +156,7 @@ export const Chart: React.FC = () => {
   const currentIndex = useTradingSimulatorStore((s) => s.currentIndex);
   const currentCandle = useTradingSimulatorStore((s) => s.currentCandle);
   const openPosition = useTradingSimulatorStore((s) => s.openPosition);
+  const orderPreview = useTradingSimulatorStore((s) => s.orderPreview);
   const tradeHistory = useTradingSimulatorStore((s) => s.tradeHistory);
   const currentTimeframe = useTradingSimulatorStore((s) => s.currentTimeframe);
   const isLiveMode = useTradingSimulatorStore((s) => s.isLiveMode);
@@ -180,6 +183,7 @@ export const Chart: React.FC = () => {
 
   // Interactive drawing creation state
   const [drawingStartPoint, setDrawingStartPoint] = useState<DataPoint | null>(null);
+  const [drawingStartTool, setDrawingStartTool] = useState<ToolType | null>(null);
   const [currentMousePoint, setCurrentMousePoint] = useState<{ x: number; y: number; time: number; price: number } | null>(null);
   const [textInputPos, setTextInputPos] = useState<{ x: number; y: number; point: DataPoint } | null>(null);
   const [textInputValue, setTextInputValue] = useState('');
@@ -580,6 +584,38 @@ export const Chart: React.FC = () => {
     const series = seriesRef.current;
     if (!chart || !series) return;
 
+    series.applyOptions({
+      autoscaleInfoProvider: (baseImplementation: () => AutoscaleInfo | null) => {
+        const baseInfo = baseImplementation();
+        const priceLevels = drawings.flatMap((drawing) => {
+          if (drawing.type !== 'long_position' && drawing.type !== 'short_position') return [];
+          return [drawing.entryPoint.price, drawing.stopLossPrice, drawing.takeProfitPrice];
+        });
+        if (orderPreview) {
+          if (currentCandle) priceLevels.push(currentCandle.close);
+          if (orderPreview.stopLoss !== undefined) priceLevels.push(orderPreview.stopLoss);
+          if (orderPreview.takeProfit !== undefined) priceLevels.push(orderPreview.takeProfit);
+        }
+
+        const validLevels = priceLevels.filter(Number.isFinite);
+        if (validLevels.length === 0) return baseInfo;
+
+        const minValue = Math.min(baseInfo?.priceRange?.minValue ?? Infinity, ...validLevels);
+        const maxValue = Math.max(baseInfo?.priceRange?.maxValue ?? -Infinity, ...validLevels);
+        const padding = Math.max((maxValue - minValue) * 0.04, 0.01);
+        return {
+          ...baseInfo,
+          priceRange: { minValue: minValue - padding, maxValue: maxValue + padding },
+        };
+      },
+    });
+  }, [drawings, orderPreview, currentCandle]);
+
+  useEffect(() => {
+    const chart = chartRef.current;
+    const series = seriesRef.current;
+    if (!chart || !series) return;
+
     const timeScale = chart.timeScale();
     const toCoords = (pt: DataPoint) => {
       const x = timeScale.timeToCoordinate(pt.time as UTCTimestamp);
@@ -693,8 +729,8 @@ export const Chart: React.FC = () => {
           const targetZoneHeight = Math.abs(tpY - entryY);
           const stopZoneTop = Math.min(entryY, slY);
           const stopZoneHeight = Math.abs(slY - entryY);
-          const riskPts = Math.abs(d.entryPoint.price - d.stopLossPrice);
-          const rewardPts = Math.abs(d.takeProfitPrice - d.entryPoint.price);
+          const riskPts = Math.abs(d.entryPoint.price - d.stopLossPrice) * d.quantity;
+          const rewardPts = Math.abs(d.takeProfitPrice - d.entryPoint.price) * d.quantity;
           const rrRatio = riskPts > 0 ? (rewardPts / riskPts).toFixed(2) : '0.00';
 
           results.push({
@@ -730,10 +766,70 @@ export const Chart: React.FC = () => {
       }
     }
 
+    if (
+      orderPreview &&
+      currentCandle &&
+      orderPreview.stopLoss !== undefined &&
+      orderPreview.takeProfit !== undefined
+    ) {
+      const previewDrawing: PositionToolDrawing = {
+        id: 'order-preview',
+        type: orderPreview.side === 'LONG' ? 'long_position' : 'short_position',
+        entryPoint: { time: currentCandle.timestamp, price: currentCandle.close },
+        stopLossPrice: orderPreview.stopLoss,
+        takeProfitPrice: orderPreview.takeProfit,
+        quantity: orderPreview.quantity,
+        targetTime: currentCandle.timestamp + 25 * 60,
+      };
+      const entryY = series.priceToCoordinate(previewDrawing.entryPoint.price);
+      const slY = series.priceToCoordinate(previewDrawing.stopLossPrice);
+      const tpY = series.priceToCoordinate(previewDrawing.takeProfitPrice);
+      const startX = timeScale.timeToCoordinate(previewDrawing.entryPoint.time as UTCTimestamp);
+      const endX = timeScale.timeToCoordinate(previewDrawing.targetTime as UTCTimestamp);
+
+      if (entryY !== null && slY !== null && tpY !== null && startX !== null) {
+        const boxWidth = Math.max(140, endX !== null ? endX - startX : 200);
+        const targetZoneTop = Math.min(entryY, tpY);
+        const stopZoneTop = Math.min(entryY, slY);
+        const riskPts = Math.abs(previewDrawing.entryPoint.price - previewDrawing.stopLossPrice) *
+          previewDrawing.quantity;
+        const rewardPts = Math.abs(previewDrawing.takeProfitPrice - previewDrawing.entryPoint.price) *
+          previewDrawing.quantity;
+        results.push({
+          id: previewDrawing.id,
+          type: previewDrawing.type,
+          preview: true,
+          raw: previewDrawing,
+          anchor: { x: startX, y: Math.min(targetZoneTop, stopZoneTop) },
+          position: {
+            isLong: previewDrawing.type === 'long_position',
+            startX,
+            boxWidth,
+            entryY,
+            targetZoneTop,
+            targetZoneHeight: Math.abs(tpY - entryY),
+            stopZoneTop,
+            stopZoneHeight: Math.abs(slY - entryY),
+            riskPts,
+            rewardPts,
+            rrRatio: riskPts > 0 ? (rewardPts / riskPts).toFixed(2) : '0.00',
+            tpPrice: previewDrawing.takeProfitPrice,
+            slPrice: previewDrawing.stopLossPrice,
+            entryPrice: previewDrawing.entryPoint.price,
+            tpHandle: { x: startX + boxWidth / 2, y: tpY },
+            slHandle: { x: startX + boxWidth / 2, y: slY },
+            entryHandle: { x: startX + boxWidth / 2, y: entryY },
+            rightHandle: { x: startX + boxWidth, y: entryY },
+            rawPos: previewDrawing,
+          },
+        });
+      }
+    }
+
     setProjectedDrawings(results);
 
     // Compute multi-point preview if in progress
-    if (drawingStartPoint && currentMousePoint) {
+    if (drawingStartPoint && drawingStartTool === activeTool && currentMousePoint) {
       const p1 = toCoords(drawingStartPoint);
       if (p1) {
         if (activeTool === 'trendline') {
@@ -762,7 +858,7 @@ export const Chart: React.FC = () => {
     } else {
       setProjectedPreview(null);
     }
-  }, [viewportKey, drawings, drawingStartPoint, currentMousePoint, activeTool, candles, currentIndex]);
+  }, [viewportKey, drawings, drawingStartPoint, drawingStartTool, currentMousePoint, activeTool, candles, currentIndex, orderPreview, currentCandle]);
 
   // Update Price Lines for Open Position (Entry, SL, TP)
   useEffect(() => {
@@ -863,25 +959,46 @@ export const Chart: React.FC = () => {
     markersPlugin.setMarkers(markers);
   }, [openPosition, tradeHistory, currentCandle]);
 
-  // Keyboard shortcut listener for selected drawing (Delete / Escape)
+  // Keyboard shortcuts for deleting drawings and cancelling the current tool.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
 
+      if (e.key === 'Escape') {
+        if (textInputPos) {
+          setTextInputPos(null);
+          setTextInputValue('');
+          setActiveTool('cursor');
+        } else if (drawingStartPoint || activeTool !== 'cursor') {
+          setDrawingStartTool(null);
+          setDrawingStartPoint(null);
+          setActiveTool('cursor');
+        } else if (selectedDrawingId) {
+          setSelectedDrawingId(null);
+        }
+        return;
+      }
+
       if (selectedDrawingId) {
         if (e.key === 'Delete' || e.key === 'Backspace') {
           e.preventDefault();
           removeDrawing(selectedDrawingId);
-        } else if (e.key === 'Escape') {
-          setSelectedDrawingId(null);
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedDrawingId, removeDrawing, setSelectedDrawingId]);
+  }, [
+    activeTool,
+    drawingStartPoint,
+    removeDrawing,
+    selectedDrawingId,
+    setActiveTool,
+    setSelectedDrawingId,
+    textInputPos,
+  ]);
 
   const handleResetChartView = () => {
     const chart = chartRef.current;
@@ -1015,6 +1132,13 @@ export const Chart: React.FC = () => {
     if (!pt) return;
 
     const clickedPoint: DataPoint = { time: pt.time, price: pt.price };
+    let startPoint = drawingStartPoint;
+
+    if (drawingStartPoint && drawingStartTool !== activeTool) {
+      setDrawingStartTool(null);
+      setDrawingStartPoint(null);
+      startPoint = null;
+    }
 
     // If clicking on empty canvas with cursor, deselect drawing
     if (activeTool === 'cursor') {
@@ -1031,10 +1155,11 @@ export const Chart: React.FC = () => {
     // 2. Long Position Tool (TradingView Style)
     if (activeTool === 'long_position') {
       const entryPrice = Math.round(clickedPoint.price * 100) / 100;
-      const riskAmount = 10;
-      const rewardAmount = 20;
-      const slPrice = Math.round((entryPrice - riskAmount) * 100) / 100;
-      const tpPrice = Math.round((entryPrice + rewardAmount) * 100) / 100;
+      const preview = orderPreview?.side === 'LONG' ? orderPreview : null;
+      const slPrice = preview?.stopLoss ??
+        Math.round((entryPrice - 10) * 100) / 100;
+      const tpPrice = preview?.takeProfit ??
+        Math.round((entryPrice + 20) * 100) / 100;
       const targetTime = clickedPoint.time + 25 * 60;
 
       addDrawing({
@@ -1043,7 +1168,7 @@ export const Chart: React.FC = () => {
         entryPoint: clickedPoint,
         stopLossPrice: slPrice,
         takeProfitPrice: tpPrice,
-        quantity: 1,
+        quantity: preview?.quantity ?? 1,
         targetTime,
       });
 
@@ -1054,10 +1179,11 @@ export const Chart: React.FC = () => {
     // 3. Short Position Tool (TradingView Style)
     if (activeTool === 'short_position') {
       const entryPrice = Math.round(clickedPoint.price * 100) / 100;
-      const riskAmount = 10;
-      const rewardAmount = 20;
-      const slPrice = Math.round((entryPrice + riskAmount) * 100) / 100;
-      const tpPrice = Math.round((entryPrice - rewardAmount) * 100) / 100;
+      const preview = orderPreview?.side === 'SHORT' ? orderPreview : null;
+      const slPrice = preview?.stopLoss ??
+        Math.round((entryPrice + 10) * 100) / 100;
+      const tpPrice = preview?.takeProfit ??
+        Math.round((entryPrice - 20) * 100) / 100;
       const targetTime = clickedPoint.time + 25 * 60;
 
       addDrawing({
@@ -1066,7 +1192,7 @@ export const Chart: React.FC = () => {
         entryPoint: clickedPoint,
         stopLossPrice: slPrice,
         takeProfitPrice: tpPrice,
-        quantity: 1,
+        quantity: preview?.quantity ?? 1,
         targetTime,
       });
 
@@ -1095,10 +1221,11 @@ export const Chart: React.FC = () => {
     }
 
     // 6. Multi-point tools (Trendline, Rectangle, Circle)
-    if (!drawingStartPoint) {
+    if (!startPoint) {
+      setDrawingStartTool(activeTool);
       setDrawingStartPoint(clickedPoint);
     } else {
-      const p1 = drawingStartPoint;
+      const p1 = startPoint;
       const p2 = clickedPoint;
 
       if (activeTool === 'trendline') {
@@ -1127,6 +1254,7 @@ export const Chart: React.FC = () => {
         });
       }
 
+      setDrawingStartTool(null);
       setDrawingStartPoint(null);
       setActiveTool('cursor');
     }
@@ -1197,6 +1325,19 @@ export const Chart: React.FC = () => {
   const isUp = priceChange >= 0;
 
   const isInteractiveToolActive = activeTool !== 'cursor';
+  const activeToolInstruction = activeTool === 'bar_replay'
+    ? 'Click a candle to set the replay start. Esc to cancel.'
+    : activeTool === 'long_position' || activeTool === 'short_position'
+      ? 'Click the chart to place the position tool. Esc to cancel.'
+      : activeTool === 'horizontal_line'
+        ? 'Click a price level to place a horizontal line. Esc to cancel.'
+        : activeTool === 'text'
+          ? 'Click the chart to add a text note. Esc to cancel.'
+          : activeTool === 'cursor'
+            ? ''
+            : drawingStartPoint && drawingStartTool === activeTool
+              ? 'Click a second point to finish. Esc to cancel.'
+              : 'Click the chart to set the first point. Esc to cancel.';
   const currentMarketSession = clockNow === null
     ? null
     : getSessionInfo(Math.floor(clockNow / 1000));
@@ -1384,42 +1525,18 @@ export const Chart: React.FC = () => {
 
       {/* Floating Instructions Banner when a tool is active */}
       {isInteractiveToolActive && (
-        <div className="absolute top-12 left-4 z-20 flex items-center space-x-2 bg-amber-500/15 border border-amber-500/40 text-amber-300 px-3 py-1 rounded-md text-[11px] font-medium shadow-lg backdrop-blur-md animate-fadeIn">
-          {activeTool === 'bar_replay' && (
-            <>
-              <Scissors className="h-3.5 w-3.5 text-amber-400" />
-              <span>Click any candlestick on the chart to cut future data and begin backtest</span>
-            </>
+        <div role="status" aria-live="polite" className="absolute top-12 left-4 z-20 flex items-center space-x-2 bg-amber-500/15 border border-amber-500/40 text-amber-300 px-3 py-1 rounded-md text-[11px] font-medium shadow-lg backdrop-blur-md animate-fadeIn">
+          {activeTool === 'bar_replay' && <Scissors className="h-3.5 w-3.5 text-amber-400" />}
+          {(activeTool === 'long_position' || activeTool === 'short_position') && (
+            <Zap className={`h-3.5 w-3.5 ${activeTool === 'long_position' ? 'text-emerald-400' : 'text-rose-400'}`} />
           )}
-          {activeTool === 'long_position' && (
-            <>
-              <Zap className="h-3.5 w-3.5 text-emerald-400" />
-              <span>Click on chart to place TradingView Long Position Risk/Reward box</span>
-            </>
-          )}
-          {activeTool === 'short_position' && (
-            <>
-              <Zap className="h-3.5 w-3.5 text-rose-400" />
-              <span>Click on chart to place TradingView Short Position Risk/Reward box</span>
-            </>
-          )}
-          {activeTool === 'trendline' && (
-            <span>Trendline: {drawingStartPoint ? 'Click second point to finish' : 'Click start point'}</span>
-          )}
-          {activeTool === 'rectangle' && (
-            <span>Rectangle: {drawingStartPoint ? 'Click corner point to finish' : 'Click first corner'}</span>
-          )}
-          {activeTool === 'circle' && (
-            <span>Circle: {drawingStartPoint ? 'Click radius edge to finish' : 'Click center point'}</span>
-          )}
-          {activeTool === 'horizontal_line' && (
-            <span>Click on price level to place Horizontal Line</span>
-          )}
-          {activeTool === 'text' && (
-            <span>Click where you want to add text annotation</span>
-          )}
+          <span>{activeToolInstruction}</span>
           <button
+            type="button"
+            aria-label="Cancel active tool"
+            title="Cancel (Esc)"
             onClick={() => {
+              setDrawingStartTool(null);
               setActiveTool('cursor');
               setDrawingStartPoint(null);
             }}
@@ -1687,8 +1804,9 @@ export const Chart: React.FC = () => {
             return (
               <g
                 key={d.id}
-                className="pointer-events-auto"
+                className={d.preview ? 'pointer-events-none' : 'pointer-events-auto'}
                 onClick={(e) => {
+                  if (d.preview) return;
                   e.stopPropagation();
                   setSelectedDrawingId(d.id);
                 }}
@@ -1760,8 +1878,9 @@ export const Chart: React.FC = () => {
             return (
               <g
                 key={d.id}
-                className="pointer-events-auto"
+                className={d.preview ? 'pointer-events-none' : 'pointer-events-auto'}
                 onClick={(e) => {
+                  if (d.preview) return;
                   e.stopPropagation();
                   setSelectedDrawingId(d.id);
                 }}
@@ -1861,6 +1980,9 @@ export const Chart: React.FC = () => {
                   fill="rgba(8, 153, 129, 0.22)"
                   stroke="#089981"
                   strokeWidth={isSelected ? '2' : '1.5'}
+                  opacity={d.preview ? 0.72 : 1}
+                  className={d.preview ? undefined : 'cursor-move'}
+                  onMouseDown={d.preview ? undefined : (e) => startDrag(e, d.id, 'move')}
                 />
 
                 {/* Red Stop Loss Zone */}
@@ -1872,6 +1994,9 @@ export const Chart: React.FC = () => {
                   fill="rgba(242, 54, 69, 0.22)"
                   stroke="#f23645"
                   strokeWidth={isSelected ? '2' : '1.5'}
+                  opacity={d.preview ? 0.72 : 1}
+                  className={d.preview ? undefined : 'cursor-move'}
+                  onMouseDown={d.preview ? undefined : (e) => startDrag(e, d.id, 'move')}
                 />
 
                 {/* Center Entry Line (Draggable to move entry) */}
@@ -1883,6 +2008,8 @@ export const Chart: React.FC = () => {
                   stroke="#ffffff"
                   strokeWidth="2"
                   strokeDasharray="4 2"
+                  className={d.preview ? undefined : 'cursor-move'}
+                  onMouseDown={d.preview ? undefined : (e) => startDrag(e, d.id, 'move')}
                 />
 
                 {/* Target Price Label */}
@@ -1910,7 +2037,7 @@ export const Chart: React.FC = () => {
                 </text>
 
                 {/* Interactive Resize Handles when Selected */}
-                {isSelected && (
+                {isSelected && !d.preview && (
                   <>
                     {/* TP Handle (Drag to adjust Take Profit) */}
                     <circle
@@ -1960,32 +2087,40 @@ export const Chart: React.FC = () => {
                     <span className="font-bold text-amber-300 font-mono">
                       R:R {pos.rrRatio}
                     </span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleExecutePositionOrder(pos.rawPos);
-                      }}
-                      title="Place simulated order with these SL/TP levels"
-                      className={`flex items-center space-x-1 px-1.5 py-0.2 rounded font-bold text-white transition-all cursor-pointer ${
-                        pos.isLong
-                          ? 'bg-emerald-600 hover:bg-emerald-500 shadow-sm shadow-emerald-900/60'
-                          : 'bg-rose-600 hover:bg-rose-500 shadow-sm shadow-rose-900/60'
-                      }`}
-                    >
-                      <Zap className="h-2.5 w-2.5 fill-current" />
-                      <span>{pos.isLong ? 'Buy' : 'Sell'}</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeDrawing(d.id);
-                      }}
-                      className="text-neutral-400 hover:text-rose-400 transition-colors cursor-pointer"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
+                    {d.preview ? (
+                      <span className={pos.isLong ? 'font-semibold text-emerald-300' : 'font-semibold text-rose-300'}>
+                        {pos.isLong ? 'LONG PREVIEW' : 'SHORT PREVIEW'}
+                      </span>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleExecutePositionOrder(pos.rawPos);
+                          }}
+                          title="Place simulated order with these SL/TP levels"
+                          className={`flex items-center space-x-1 px-1.5 py-0.2 rounded font-bold text-white transition-all cursor-pointer ${
+                            pos.isLong
+                              ? 'bg-emerald-600 hover:bg-emerald-500 shadow-sm shadow-emerald-900/60'
+                              : 'bg-rose-600 hover:bg-rose-500 shadow-sm shadow-rose-900/60'
+                          }`}
+                        >
+                          <Zap className="h-2.5 w-2.5 fill-current" />
+                          <span>{pos.isLong ? 'Buy' : 'Sell'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeDrawing(d.id);
+                          }}
+                          className="text-neutral-400 hover:text-rose-400 transition-colors cursor-pointer"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </foreignObject>
               </g>
@@ -2088,7 +2223,11 @@ export const Chart: React.FC = () => {
             onChange={(e) => setTextInputValue(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleSaveTextAnnotation();
-              if (e.key === 'Escape') setTextInputPos(null);
+              if (e.key === 'Escape') {
+                setTextInputPos(null);
+                setTextInputValue('');
+                setActiveTool('cursor');
+              }
             }}
             placeholder="Annotation text..."
             className="bg-[#0b0e14] border border-[#232b3d] px-2 py-1 text-xs text-white rounded outline-none focus:border-amber-500 w-44 font-mono"
@@ -2100,7 +2239,13 @@ export const Chart: React.FC = () => {
             Add
           </button>
           <button
-            onClick={() => setTextInputPos(null)}
+            type="button"
+            aria-label="Cancel text annotation"
+            onClick={() => {
+              setTextInputPos(null);
+              setTextInputValue('');
+              setActiveTool('cursor');
+            }}
             className="text-neutral-400 hover:text-white text-xs cursor-pointer"
           >
             <X className="h-4 w-4" />
