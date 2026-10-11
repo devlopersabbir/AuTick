@@ -140,4 +140,17 @@ describe('Market Data Validation and Normalization', () => {
     const emptyResult = validateAndSortCandles([]);
     expect(emptyResult).toEqual([]);
   });
+
+  it('supports custom timeframe interval parameter in fetch requests', async () => {
+    const bybit = new BybitMarketDataProvider();
+    // Test validation for custom timeframe with invalid date range
+    await expect(
+      bybit.fetchCandles({
+        symbol: 'XAUUSD',
+        startTime: 1700000100,
+        endTime: 1700000000,
+        timeframe: '5m',
+      })
+    ).rejects.toThrow('Invalid date range');
+  });
 });

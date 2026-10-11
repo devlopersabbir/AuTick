@@ -11,6 +11,7 @@ export const ReplayToolbar: React.FC = () => {
   const currentCandle = useTradingSimulatorStore((s) => s.currentCandle);
   const replayStatus = useTradingSimulatorStore((s) => s.replayStatus);
   const playbackSpeed = useTradingSimulatorStore((s) => s.playbackSpeed);
+  const currentTimeframe = useTradingSimulatorStore((s) => s.currentTimeframe);
 
   const play = useTradingSimulatorStore((s) => s.play);
   const pause = useTradingSimulatorStore((s) => s.pause);
@@ -151,7 +152,7 @@ export const ReplayToolbar: React.FC = () => {
           </span>
         ) : (
           <span className="rounded bg-[#10141f] border border-[#1e2638] px-2 py-1 text-[11px] font-mono text-neutral-400">
-            Source: <strong className="text-neutral-200">1-Min Candles</strong>
+            Source: <strong className="text-neutral-200">{currentTimeframe.toUpperCase()} Candles</strong> ({currentTimeframe}/tick)
           </span>
         )}
       </div>

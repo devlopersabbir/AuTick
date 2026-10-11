@@ -58,11 +58,14 @@ export async function GET(request: NextRequest): Promise<NextResponse<MarketData
       );
     }
 
+    const timeframeParam = searchParams.get('timeframe') || '1m';
+
     const provider = getMarketDataProvider(providerParam);
     const result = await provider.fetchCandles({
       symbol: 'XAUUSD',
       startTime,
       endTime,
+      timeframe: timeframeParam,
     });
 
     return NextResponse.json({

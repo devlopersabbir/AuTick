@@ -15,6 +15,9 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDataSelector }) => {
   const candles = useTradingSimulatorStore((s) => s.candles);
   const totalCandles = candles.length;
   const replayStatus = useTradingSimulatorStore((s) => s.replayStatus);
+  const currentTimeframe = useTradingSimulatorStore((s) => s.currentTimeframe);
+  const changeTimeframe = useTradingSimulatorStore((s) => s.changeTimeframe);
+  const isLoadingData = useTradingSimulatorStore((s) => s.isLoadingData);
 
   const formatUtcClock = (timestamp?: number) => {
     if (!timestamp) return '----:--:-- --:--:-- UTC';
@@ -62,15 +65,29 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDataSelector }) => {
 
         <div className="h-5 w-px bg-[#1c2230] hidden sm:block" />
 
-        {/* Ticker & Live Price */}
+        {/* Ticker, Timeframe Switcher & Live Price */}
         <div className="flex items-center space-x-3">
-          <div className="flex items-center space-x-1.5">
-            <span className="rounded bg-[#161b26] border border-[#232b3d] px-2 py-0.5 text-xs font-bold text-amber-400">
-              XAU/USD
-            </span>
-            <span className="rounded bg-[#161b26] px-1.5 py-0.5 text-[10px] font-mono text-neutral-400">
-              1M
-            </span>
+          <span className="rounded bg-[#161b26] border border-[#232b3d] px-2 py-0.5 text-xs font-bold text-amber-400">
+            XAU/USD
+          </span>
+
+          {/* Timeframe selector bar */}
+          <div className="flex items-center space-x-0.5 rounded-lg border border-[#1e2638] bg-[#10141f] p-0.5">
+            {['1m', '3m', '5m', '15m', '30m', '1h', '4h', '1D'].map((tf) => (
+              <button
+                key={tf}
+                onClick={() => changeTimeframe(tf)}
+                disabled={isLoadingData}
+                title={`Switch to ${tf} candlestick interval`}
+                className={`rounded px-1.5 py-0.5 text-[11px] font-mono font-bold transition-all cursor-pointer ${
+                  currentTimeframe.toLowerCase() === tf.toLowerCase()
+                    ? 'bg-amber-500 text-black shadow-sm font-extrabold'
+                    : 'text-neutral-400 hover:text-white hover:bg-[#161c2b]'
+                }`}
+              >
+                {tf}
+              </button>
+            ))}
           </div>
 
           {currentCandle ? (

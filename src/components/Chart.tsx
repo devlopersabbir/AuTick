@@ -35,6 +35,7 @@ export const Chart: React.FC = () => {
   const currentCandle = useTradingSimulatorStore((s) => s.currentCandle);
   const openPosition = useTradingSimulatorStore((s) => s.openPosition);
   const tradeHistory = useTradingSimulatorStore((s) => s.tradeHistory);
+  const currentTimeframe = useTradingSimulatorStore((s) => s.currentTimeframe);
 
   // Track prev index to decide whether to update single candle or setData
   const prevIndexRef = useRef<number>(-1);
@@ -322,7 +323,9 @@ export const Chart: React.FC = () => {
         <div className="flex items-center space-x-1.5 font-bold">
           <Activity className="h-3.5 w-3.5 text-amber-400" />
           <span className="text-white tracking-wide">XAUUSD</span>
-          <span className="text-[10px] bg-[#161d2d] text-amber-400 border border-amber-500/30 px-1 rounded font-mono">1M</span>
+          <span className="text-[10px] bg-[#161d2d] text-amber-400 border border-amber-500/30 px-1 rounded font-mono">
+            {currentTimeframe.toUpperCase()}
+          </span>
         </div>
 
         {activeCandle ? (

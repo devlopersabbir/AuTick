@@ -36,12 +36,27 @@ export class BybitMarketDataProvider implements MarketDataProvider {
     const maxPages = 10; // Up to 10,000 1-minute candles (~7 days)
     let page = 0;
 
+    const timeframeMap: Record<string, string> = {
+      '1m': '1',
+      '3m': '3',
+      '5m': '5',
+      '15m': '15',
+      '30m': '30',
+      '1h': '60',
+      '2h': '120',
+      '4h': '240',
+      '1d': 'D',
+      'd': 'D',
+    };
+    const requestedTf = (params.timeframe || '1m').toLowerCase();
+    const bybitInterval = timeframeMap[requestedTf] || '1';
+
     while (currentEndMs > startMs && page < maxPages) {
       page++;
       const url = new URL(this.baseUrl);
       url.searchParams.set('category', 'linear');
       url.searchParams.set('symbol', 'XAUUSDT');
-      url.searchParams.set('interval', '1');
+      url.searchParams.set('interval', bybitInterval);
       url.searchParams.set('start', startMs.toString());
       url.searchParams.set('end', currentEndMs.toString());
       url.searchParams.set('limit', '1000');
@@ -107,7 +122,7 @@ export class BybitMarketDataProvider implements MarketDataProvider {
 
     const metadata: DatasetMetadata = {
       symbol: 'XAUUSD',
-      timeframe: '1m',
+      timeframe: params.timeframe || '1m',
       startTime: validatedCandles[0].timestamp,
       endTime: validatedCandles[validatedCandles.length - 1].timestamp,
       candleCount: validatedCandles.length,

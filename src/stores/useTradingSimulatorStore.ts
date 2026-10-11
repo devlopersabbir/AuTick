@@ -37,8 +37,12 @@ interface TradingSimulatorState {
   replayEngine: ReplayEngine;
   tradingEngine: TradingEngine;
 
+  // Timeframe
+  currentTimeframe: string;
+
   // Actions
-  fetchMarketData: (params: { startTime: number; endTime: number; provider?: string }) => Promise<boolean>;
+  fetchMarketData: (params: { startTime: number; endTime: number; provider?: string; timeframe?: string }) => Promise<boolean>;
+  changeTimeframe: (timeframe: string) => Promise<boolean>;
   setCandlesDirectly: (candles: Candle[], metadata: DatasetMetadata) => void;
   play: () => void;
   pause: () => void;
@@ -106,13 +110,17 @@ export const useTradingSimulatorStore = create<TradingSimulatorState>((set, get)
     replayEngine: initialReplayEngine,
     tradingEngine: initialTradingEngine,
 
-    fetchMarketData: async ({ startTime, endTime, provider }) => {
-      set({ isLoadingData: true, dataError: null });
+    currentTimeframe: '1m',
+
+    fetchMarketData: async ({ startTime, endTime, provider, timeframe }) => {
+      const activeTf = timeframe || get().currentTimeframe || '1m';
+      set({ isLoadingData: true, dataError: null, currentTimeframe: activeTf });
 
       try {
         const url = new URL('/api/market-data', window.location.origin);
         url.searchParams.set('startTime', startTime.toString());
         url.searchParams.set('endTime', endTime.toString());
+        url.searchParams.set('timeframe', activeTf);
         if (provider) {
           url.searchParams.set('provider', provider);
         }
@@ -131,6 +139,24 @@ export const useTradingSimulatorStore = create<TradingSimulatorState>((set, get)
         const message = err instanceof Error ? err.message : 'Error fetching market data';
         set({ isLoadingData: false, dataError: message });
         return false;
+      }
+    },
+
+    changeTimeframe: async (timeframe: string) => {
+      const { metadata, fetchMarketData } = get();
+      if (metadata && metadata.startTime && metadata.endTime) {
+        return await fetchMarketData({
+          startTime: metadata.startTime,
+          endTime: metadata.endTime,
+          timeframe,
+        });
+      } else {
+        const nowSec = Math.floor(Date.now() / 1000);
+        return await fetchMarketData({
+          startTime: nowSec - 24 * 3600,
+          endTime: nowSec,
+          timeframe,
+        });
       }
     },
 

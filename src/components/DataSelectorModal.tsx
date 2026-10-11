@@ -13,8 +13,10 @@ export const DataSelectorModal: React.FC<DataSelectorModalProps> = ({ isOpen, on
   const fetchMarketData = useTradingSimulatorStore((s) => s.fetchMarketData);
   const isLoadingData = useTradingSimulatorStore((s) => s.isLoadingData);
   const dataError = useTradingSimulatorStore((s) => s.dataError);
+  const currentTimeframe = useTradingSimulatorStore((s) => s.currentTimeframe);
 
   const [provider, setProvider] = useState<string>('bybit');
+  const [selectedTimeframe, setSelectedTimeframe] = useState<string>(currentTimeframe || '1m');
   const [preset, setPreset] = useState<'24h' | '3d' | '7d' | 'custom'>('24h');
 
   const [startDateStr, setStartDateStr] = useState<string>(() => {
@@ -70,6 +72,7 @@ export const DataSelectorModal: React.FC<DataSelectorModalProps> = ({ isOpen, on
       startTime: startTimeSec,
       endTime: endTimeSec,
       provider,
+      timeframe: selectedTimeframe,
     });
 
     if (success) {
@@ -169,6 +172,27 @@ export const DataSelectorModal: React.FC<DataSelectorModalProps> = ({ isOpen, on
                   }`}
                 >
                   {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Candlestick Timeframe Selector */}
+          <div className="space-y-1.5">
+            <label className="text-neutral-300 font-semibold text-xs">Candlestick Timeframe Interval</label>
+            <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
+              {['1m', '3m', '5m', '15m', '30m', '1h', '4h', '1D'].map((tf) => (
+                <button
+                  key={tf}
+                  type="button"
+                  onClick={() => setSelectedTimeframe(tf)}
+                  className={`py-1.5 rounded-lg border text-center font-mono font-bold text-xs transition-all cursor-pointer ${
+                    selectedTimeframe.toLowerCase() === tf.toLowerCase()
+                      ? 'border-amber-500 bg-amber-500 text-black shadow-md shadow-amber-950/30'
+                      : 'border-[#1e2638] bg-[#121624] text-neutral-400 hover:text-white hover:bg-[#182030]'
+                  }`}
+                >
+                  {tf}
                 </button>
               ))}
             </div>

@@ -45,9 +45,21 @@ export class TwelveDataMarketDataProvider implements MarketDataProvider {
       return d.toISOString().replace('T', ' ').substring(0, 19);
     };
 
+    const tdTimeframeMap: Record<string, string> = {
+      '1m': '1min',
+      '5m': '5min',
+      '15m': '15min',
+      '30m': '30min',
+      '1h': '1h',
+      '4h': '4h',
+      '1d': '1day',
+      'd': '1day',
+    };
+    const tdInterval = tdTimeframeMap[(params.timeframe || '1m').toLowerCase()] || '1min';
+
     const url = new URL(this.baseUrl);
     url.searchParams.set('symbol', 'XAU/USD');
-    url.searchParams.set('interval', '1min');
+    url.searchParams.set('interval', tdInterval);
     url.searchParams.set('start_date', formatUtc(startTime));
     url.searchParams.set('end_date', formatUtc(endTime));
     url.searchParams.set('outputsize', '5000');
@@ -92,7 +104,7 @@ export class TwelveDataMarketDataProvider implements MarketDataProvider {
 
     const metadata: DatasetMetadata = {
       symbol: 'XAUUSD',
-      timeframe: '1m',
+      timeframe: params.timeframe || '1m',
       startTime: validatedCandles[0].timestamp,
       endTime: validatedCandles[validatedCandles.length - 1].timestamp,
       candleCount: validatedCandles.length,
