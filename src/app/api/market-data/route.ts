@@ -50,46 +50,44 @@ export async function GET(request: NextRequest): Promise<NextResponse<MarketData
     // Real-time live polling for active market
     if (searchParams.get('live') === 'true') {
       const provider = getMarketDataProvider(providerParam);
-      let candles: Candle[] = [];
       const fallbackProvider = shouldFallbackToAlternateProvider(new Error('Bybit API HTTP error 403: Forbidden'), providerParam, !!process.env.TWELVE_DATA_API_KEY)
         ? getMarketDataProvider('twelvedata')
         : undefined;
-
-      const fetchLatestCandles = provider.fetchLatestCandles;
-      if (fetchLatestCandles) {
-        const fallbackLatestMethod = fallbackProvider?.fetchLatestCandles;
-        const fallbackLatestFetcher = fallbackLatestMethod
+      const nowSec = Math.floor(Date.now() / 1000);
+      const timeframeSeconds: Record<string, number> = {
+        '1m': 60,
+        '3m': 180,
+        '5m': 300,
+        '15m': 900,
+        '30m': 1800,
+        '1h': 3600,
+        '2h': 7200,
+        '4h': 14400,
+        '1d': 86400,
+      };
+      const windowSeconds = Math.max(300, (timeframeSeconds[timeframeParam.toLowerCase()] || 60) * 5);
+      const startTime = nowSec - windowSeconds;
+      const latestMethod = provider.fetchLatestCandles?.bind(provider);
+      const fallbackLatestMethod = fallbackProvider?.fetchLatestCandles?.bind(fallbackProvider);
+      const fetchLatest = latestMethod
+        ? () => latestMethod(timeframeParam, 5)
+        : () => provider.fetchCandles({
+            symbol: 'XAUUSD',
+            startTime,
+            endTime: nowSec,
+            timeframe: timeframeParam,
+          }).then((result) => result.candles);
+      const fetchFallbackLatest = fallbackProvider
+        ? fallbackLatestMethod
           ? () => fallbackLatestMethod(timeframeParam, 5)
-          : undefined;
-
-        candles = await fetchWithFallback(
-          providerParam,
-          () => fetchLatestCandles(timeframeParam, 5),
-          fallbackLatestFetcher
-        );
-      } else {
-        const nowSec = Math.floor(Date.now() / 1000);
-        const fetchCandles = provider.fetchCandles;
-        const fallbackCandlesFetcher = fallbackProvider
-          ? () => fallbackProvider.fetchCandles({
+          : () => fallbackProvider.fetchCandles({
               symbol: 'XAUUSD',
-              startTime: nowSec - 300,
+              startTime,
               endTime: nowSec,
               timeframe: timeframeParam,
             }).then((result) => result.candles)
-          : undefined;
-
-        candles = await fetchWithFallback(
-          providerParam,
-          () => fetchCandles({
-            symbol: 'XAUUSD',
-            startTime: nowSec - 300,
-            endTime: nowSec,
-            timeframe: timeframeParam,
-          }).then((result) => result.candles),
-          fallbackCandlesFetcher
-        );
-      }
+        : undefined;
+      const candles = await fetchWithFallback(providerParam, fetchLatest, fetchFallbackLatest);
 
       return NextResponse.json({
         success: true,
@@ -114,9 +112,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<MarketData
         ? getMarketDataProvider('twelvedata')
         : undefined;
 
-      const fetchOlderCandles = provider.fetchOlderCandles;
+      const fetchOlderCandles = provider.fetchOlderCandles?.bind(provider);
       if (fetchOlderCandles) {
-        const fallbackOlderMethod = fallbackProvider?.fetchOlderCandles;
+        const fallbackOlderMethod = fallbackProvider?.fetchOlderCandles?.bind(fallbackProvider);
         const fallbackOlderFetcher = fallbackOlderMethod
           ? () => fallbackOlderMethod(endTimestamp, timeframeParam, limit)
           : undefined;

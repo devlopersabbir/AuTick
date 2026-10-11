@@ -198,6 +198,7 @@ export const Chart: React.FC = () => {
   // Track prev index to decide whether to update single candle or setData
   const prevIndexRef = useRef<number>(-1);
   const replayAnimationFrameRef = useRef<number | null>(null);
+  const renderedCurrentCandleRef = useRef<Candle | null>(null);
 
   // Hovered candle for OHLC legend
   const [hoveredCandle, setHoveredCandle] = useState<Candle | null>(null);
@@ -224,7 +225,10 @@ export const Chart: React.FC = () => {
     if (!isLiveMode) return;
 
     let isMounted = true;
+    let isRequestInFlight = false;
     const pollLive = async () => {
+      if (isRequestInFlight) return;
+      isRequestInFlight = true;
       try {
         const res = await fetch(`/api/market-data?live=true&timeframe=${currentTimeframe}`, {
           cache: 'no-store',
@@ -236,10 +240,13 @@ export const Chart: React.FC = () => {
         }
       } catch {
         // Silent catch for network hiccups
+      } finally {
+        isRequestInFlight = false;
       }
     };
 
-    const intervalId = setInterval(pollLive, 2500);
+    void pollLive();
+    const intervalId = setInterval(pollLive, 1000);
     return () => {
       isMounted = false;
       clearInterval(intervalId);
@@ -452,15 +459,56 @@ export const Chart: React.FC = () => {
       }
       series.setData([]);
       prevIndexRef.current = -1;
+      renderedCurrentCandleRef.current = null;
       return;
     }
 
     const prevIndex = prevIndexRef.current;
     const isSingleStepForward = currentIndex === prevIndex + 1 && prevIndex >= 0;
+    const nextCandle = candles[currentIndex];
+    const previousRenderedCandle = renderedCurrentCandleRef.current;
+    const isLiveCandleUpdate = isLiveMode && currentIndex === prevIndex &&
+      previousRenderedCandle?.timestamp === nextCandle.timestamp;
 
-    if (isSingleStepForward) {
+    if (isLiveCandleUpdate && previousRenderedCandle) {
+      if (replayAnimationFrameRef.current !== null) {
+        cancelAnimationFrame(replayAnimationFrameRef.current);
+      }
+
+      const durationMs = 850;
+      const startTime = performance.now();
+      const animateLiveCandle = (now: number) => {
+        const progress = Math.min((now - startTime) / durationMs, 1);
+        const eased = 1 - (1 - progress) ** 3;
+        const interpolatedCandle = {
+          timestamp: nextCandle.timestamp,
+          open: previousRenderedCandle.open + (nextCandle.open - previousRenderedCandle.open) * eased,
+          high: previousRenderedCandle.high + (nextCandle.high - previousRenderedCandle.high) * eased,
+          low: previousRenderedCandle.low + (nextCandle.low - previousRenderedCandle.low) * eased,
+          close: previousRenderedCandle.close + (nextCandle.close - previousRenderedCandle.close) * eased,
+        };
+
+        series.update({
+          time: interpolatedCandle.timestamp as UTCTimestamp,
+          open: interpolatedCandle.open,
+          high: interpolatedCandle.high,
+          low: interpolatedCandle.low,
+          close: interpolatedCandle.close,
+        });
+        renderedCurrentCandleRef.current = interpolatedCandle;
+
+        if (progress < 1) {
+          replayAnimationFrameRef.current = requestAnimationFrame(animateLiveCandle);
+          return;
+        }
+
+        renderedCurrentCandleRef.current = nextCandle;
+        replayAnimationFrameRef.current = null;
+      };
+
+      replayAnimationFrameRef.current = requestAnimationFrame(animateLiveCandle);
+    } else if (isSingleStepForward) {
       const previousCandle = candles[currentIndex - 1];
-      const nextCandle = candles[currentIndex];
       const durationMs = 220;
       const startTime = performance.now();
 
@@ -473,13 +521,21 @@ export const Chart: React.FC = () => {
         const progress = Math.min(elapsed / durationMs, 1);
         const eased = 1 - (1 - progress) ** 3;
 
-        series.update({
-          time: nextCandle.timestamp as UTCTimestamp,
+        const interpolatedCandle = {
+          timestamp: nextCandle.timestamp,
           open: previousCandle.open + (nextCandle.open - previousCandle.open) * eased,
           high: previousCandle.high + (nextCandle.high - previousCandle.high) * eased,
           low: previousCandle.low + (nextCandle.low - previousCandle.low) * eased,
           close: previousCandle.close + (nextCandle.close - previousCandle.close) * eased,
+        };
+        series.update({
+          time: interpolatedCandle.timestamp as UTCTimestamp,
+          open: interpolatedCandle.open,
+          high: interpolatedCandle.high,
+          low: interpolatedCandle.low,
+          close: interpolatedCandle.close,
         });
+        renderedCurrentCandleRef.current = interpolatedCandle;
 
         if (progress < 1) {
           replayAnimationFrameRef.current = requestAnimationFrame(animateCandle);
@@ -493,6 +549,7 @@ export const Chart: React.FC = () => {
           low: nextCandle.low,
           close: nextCandle.close,
         });
+        renderedCurrentCandleRef.current = nextCandle;
         replayAnimationFrameRef.current = null;
       };
 
@@ -511,10 +568,11 @@ export const Chart: React.FC = () => {
         replayAnimationFrameRef.current = null;
       }
       series.setData(visible);
+      renderedCurrentCandleRef.current = candles[currentIndex] ?? null;
     }
 
     prevIndexRef.current = currentIndex;
-  }, [candles, currentIndex]);
+  }, [candles, currentIndex, isLiveMode]);
 
   // Project drawings into pixel coordinates inside an effect (strictly avoids reading refs during render)
   useEffect(() => {
