@@ -8,6 +8,7 @@ import {
   ReplayStatus,
   Trade,
 } from '@/types';
+import { ToolType, Drawing } from '@/types/drawings';
 import { ReplayEngine } from '@/lib/replay/replay-engine';
 import { TradingEngine } from '@/lib/trading/trading-engine';
 import { MarketDataApiResponse } from '@/lib/market-data/types';
@@ -18,6 +19,9 @@ interface TradingSimulatorState {
   metadata: DatasetMetadata | null;
   isLoadingData: boolean;
   dataError: string | null;
+
+  // Live vs Backtest Replay Mode
+  isLiveMode: boolean; // TRUE: Tracking real-time live market; FALSE: Sliced backtest replay mode
 
   // Replay
   currentIndex: number;
@@ -33,6 +37,10 @@ interface TradingSimulatorState {
   tradeHistory: Trade[];
   orderError: string | null;
 
+  // TradingView Left Toolbar & Drawings
+  activeTool: ToolType;
+  drawings: Drawing[];
+
   // Internal Engine instances
   replayEngine: ReplayEngine;
   tradingEngine: TradingEngine;
@@ -43,14 +51,27 @@ interface TradingSimulatorState {
   // Actions
   fetchMarketData: (params: { startTime: number; endTime: number; provider?: string; timeframe?: string }) => Promise<boolean>;
   changeTimeframe: (timeframe: string) => Promise<boolean>;
-  setCandlesDirectly: (candles: Candle[], metadata: DatasetMetadata) => void;
+  setCandlesDirectly: (candles: Candle[], metadata: DatasetMetadata, isLive?: boolean) => void;
+  updateLiveCandles: (newCandles: Candle[]) => void;
+  
+  // Replay & Backtest Slice Controls
   play: () => void;
   pause: () => void;
   stepForward: () => void;
   resetReplay: () => void;
   jumpToTimestamp: (timestamp: number) => void;
+  cutToBar: (timestamp: number) => void; // TradingView Bar Replay cut tool
+  returnToLive: () => void;              // Jump back to 100% real-time live market
   setPlaybackSpeed: (speed: PlaybackSpeed) => void;
 
+  // Drawing Actions
+  setActiveTool: (tool: ToolType) => void;
+  addDrawing: (drawing: Drawing) => void;
+  updateDrawing: (id: string, updates: Partial<Drawing>) => void;
+  removeDrawing: (id: string) => void;
+  clearDrawings: () => void;
+
+  // Trading Operations
   openOrder: (params: OpenOrderParams) => boolean;
   closeCurrentPosition: () => boolean;
   resetSimulation: () => void;
@@ -95,6 +116,8 @@ export const useTradingSimulatorStore = create<TradingSimulatorState>((set, get)
     isLoadingData: false,
     dataError: null,
 
+    isLiveMode: true,
+
     currentIndex: -1,
     currentCandle: null,
     replayStatus: 'idle',
@@ -106,6 +129,9 @@ export const useTradingSimulatorStore = create<TradingSimulatorState>((set, get)
     openPosition: null,
     tradeHistory: [],
     orderError: null,
+
+    activeTool: 'cursor',
+    drawings: [],
 
     replayEngine: initialReplayEngine,
     tradingEngine: initialTradingEngine,
@@ -132,7 +158,8 @@ export const useTradingSimulatorStore = create<TradingSimulatorState>((set, get)
           throw new Error(json.error || 'Failed to fetch historical market data.');
         }
 
-        get().setCandlesDirectly(json.candles, json.metadata!);
+        // Live market is active by default
+        get().setCandlesDirectly(json.candles, json.metadata!, true);
         set({ isLoadingData: false, dataError: null });
         return true;
       } catch (err) {
@@ -160,12 +187,15 @@ export const useTradingSimulatorStore = create<TradingSimulatorState>((set, get)
       }
     },
 
-    setCandlesDirectly: (candles, metadata) => {
+    setCandlesDirectly: (candles, metadata, isLive = true) => {
       const { replayEngine, tradingEngine } = get();
 
       // Clean up previous listeners and setup fresh engine state
       replayEngine.cleanup();
-      const newReplayEngine = new ReplayEngine(candles, 0);
+      
+      // When live, position at latest candle; when historical replay, start at beginning or current index
+      const targetIndex = isLive && candles.length > 0 ? candles.length - 1 : 0;
+      const newReplayEngine = new ReplayEngine(candles, targetIndex);
 
       newReplayEngine.subscribe({
         onTick: syncFromTick,
@@ -174,16 +204,17 @@ export const useTradingSimulatorStore = create<TradingSimulatorState>((set, get)
 
       tradingEngine.reset(get().initialBalance);
 
-      const firstCandle = candles[0] || null;
+      const activeCandle = candles.length > 0 ? candles[targetIndex] : null;
 
       set({
         candles,
         metadata,
         replayEngine: newReplayEngine,
         tradingEngine,
-        currentIndex: candles.length > 0 ? 0 : -1,
-        currentCandle: firstCandle,
-        replayStatus: candles.length > 0 ? 'paused' : 'idle',
+        isLiveMode: isLive,
+        currentIndex: candles.length > 0 ? targetIndex : -1,
+        currentCandle: activeCandle,
+        replayStatus: isLive ? 'idle' : (candles.length > 0 ? 'paused' : 'idle'),
         balance: get().initialBalance,
         equity: get().initialBalance,
         openPosition: null,
@@ -192,8 +223,68 @@ export const useTradingSimulatorStore = create<TradingSimulatorState>((set, get)
       });
     },
 
+    updateLiveCandles: (incomingCandles: Candle[]) => {
+      const { isLiveMode, candles, tradingEngine } = get();
+      if (!isLiveMode || incomingCandles.length === 0 || candles.length === 0) return;
+
+      const currentList = [...candles];
+      let hasUpdates = false;
+
+      for (const newCandle of incomingCandles) {
+        const lastIndex = currentList.length - 1;
+        const lastCandle = currentList[lastIndex];
+
+        if (newCandle.timestamp === lastCandle.timestamp) {
+          // Intrabar tick update
+          if (
+            newCandle.close !== lastCandle.close ||
+            newCandle.high !== lastCandle.high ||
+            newCandle.low !== lastCandle.low ||
+            newCandle.volume !== lastCandle.volume
+          ) {
+            currentList[lastIndex] = {
+              ...lastCandle,
+              high: Math.max(lastCandle.high, newCandle.high),
+              low: Math.min(lastCandle.low, newCandle.low),
+              close: newCandle.close,
+              volume: Math.max(lastCandle.volume ?? 0, newCandle.volume ?? 0),
+            };
+            hasUpdates = true;
+          }
+        } else if (newCandle.timestamp > lastCandle.timestamp) {
+          // New bar has formed
+          currentList.push(newCandle);
+          hasUpdates = true;
+        }
+      }
+
+      if (hasUpdates) {
+        const updatedLastCandle = currentList[currentList.length - 1];
+        tradingEngine.processCandle(updatedLastCandle);
+        const tradingState = tradingEngine.getState();
+
+        set({
+          candles: currentList,
+          currentIndex: currentList.length - 1,
+          currentCandle: updatedLastCandle,
+          balance: tradingState.balance,
+          equity: tradingState.equity,
+          openPosition: tradingState.openPosition,
+          tradeHistory: tradingState.tradeHistory,
+        });
+      }
+    },
+
     play: () => {
-      const { replayEngine } = get();
+      const { replayEngine, isLiveMode, currentIndex, candles } = get();
+      if (isLiveMode) {
+        // If user hits play in live mode, stay paused or let them know to cut
+        return;
+      }
+      if (currentIndex >= candles.length - 1) {
+        // Reached end of slice
+        return;
+      }
       replayEngine.play();
       set({ replayStatus: replayEngine.getStatus() });
     },
@@ -205,7 +296,8 @@ export const useTradingSimulatorStore = create<TradingSimulatorState>((set, get)
     },
 
     stepForward: () => {
-      const { replayEngine } = get();
+      const { replayEngine, isLiveMode } = get();
+      if (isLiveMode) return;
       replayEngine.stepForward();
       set({ replayStatus: replayEngine.getStatus() });
     },
@@ -231,13 +323,96 @@ export const useTradingSimulatorStore = create<TradingSimulatorState>((set, get)
     jumpToTimestamp: (timestamp) => {
       const { replayEngine } = get();
       replayEngine.jumpToTimestamp(timestamp);
-      set({ replayStatus: replayEngine.getStatus() });
+      set({ replayStatus: replayEngine.getStatus(), isLiveMode: false });
+    },
+
+    cutToBar: (timestamp: number) => {
+      const { candles, replayEngine, tradingEngine } = get();
+      if (candles.length === 0) return;
+
+      // Find closest candle <= timestamp
+      let targetIndex = 0;
+      for (let i = 0; i < candles.length; i++) {
+        if (candles[i].timestamp <= timestamp) {
+          targetIndex = i;
+        } else {
+          break;
+        }
+      }
+
+      // Configure replay engine to play from this cut candle
+      replayEngine.pause();
+      replayEngine.setDataset(candles, targetIndex);
+      tradingEngine.reset(get().initialBalance);
+
+      const cutCandle = candles[targetIndex];
+
+      set({
+        isLiveMode: false,
+        currentIndex: targetIndex,
+        currentCandle: cutCandle,
+        replayStatus: 'paused',
+        activeTool: 'cursor',
+        balance: get().initialBalance,
+        equity: get().initialBalance,
+        openPosition: null,
+        tradeHistory: [],
+        orderError: null,
+      });
+    },
+
+    returnToLive: () => {
+      const { candles, replayEngine, tradingEngine } = get();
+      if (candles.length === 0) return;
+
+      replayEngine.pause();
+      const lastIndex = candles.length - 1;
+      const lastCandle = candles[lastIndex];
+
+      tradingEngine.reset(get().initialBalance);
+
+      set({
+        isLiveMode: true,
+        currentIndex: lastIndex,
+        currentCandle: lastCandle,
+        replayStatus: 'idle',
+        activeTool: 'cursor',
+        balance: get().initialBalance,
+        equity: get().initialBalance,
+        openPosition: null,
+        tradeHistory: [],
+        orderError: null,
+      });
     },
 
     setPlaybackSpeed: (speed) => {
       const { replayEngine } = get();
       replayEngine.setSpeed(speed);
       set({ playbackSpeed: speed });
+    },
+
+    setActiveTool: (tool: ToolType) => {
+      set({ activeTool: tool });
+    },
+
+    addDrawing: (drawing: Drawing) => {
+      set((state) => ({ drawings: [...state.drawings, drawing] }));
+    },
+
+    updateDrawing: (id: string, updates: Partial<Drawing>) => {
+      set((state) => ({
+        drawings: state.drawings.map((d) => (d.id === id ? ({ ...d, ...updates } as Drawing) : d)),
+      }));
+    },
+
+    removeDrawing: (id: string) => {
+      set((state) => ({
+        drawings: state.drawings.filter((d) => d.id !== id),
+      }));
+    },
+
+    clearDrawings: () => {
+      set({ drawings: [] });
     },
 
     openOrder: (params) => {

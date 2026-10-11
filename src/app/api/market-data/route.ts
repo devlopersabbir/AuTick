@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMarketDataProvider, getAvailableProviders } from '@/lib/market-data/providers';
 import { MarketDataApiResponse } from '@/lib/market-data/types';
+import { Candle } from '@/types';
 
 
 export async function GET(request: NextRequest): Promise<NextResponse<MarketDataApiResponse>> {
@@ -22,6 +23,31 @@ export async function GET(request: NextRequest): Promise<NextResponse<MarketData
           candleCount: 0,
           provider: JSON.stringify(getAvailableProviders()),
         },
+      });
+    }
+
+    const timeframeParam = searchParams.get('timeframe') || '1m';
+
+    // Real-time live polling for active market
+    if (searchParams.get('live') === 'true') {
+      const provider = getMarketDataProvider(providerParam);
+      let candles: Candle[] = [];
+      if (provider.fetchLatestCandles) {
+        candles = await provider.fetchLatestCandles(timeframeParam, 5);
+      } else {
+        const nowSec = Math.floor(Date.now() / 1000);
+        const result = await provider.fetchCandles({
+          symbol: 'XAUUSD',
+          startTime: nowSec - 300,
+          endTime: nowSec,
+          timeframe: timeframeParam,
+        });
+        candles = result.candles;
+      }
+
+      return NextResponse.json({
+        success: true,
+        candles,
       });
     }
 
@@ -57,8 +83,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<MarketData
         { status: 400 }
       );
     }
-
-    const timeframeParam = searchParams.get('timeframe') || '1m';
 
     const provider = getMarketDataProvider(providerParam);
     const result = await provider.fetchCandles({

@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Header } from '@/components/Header';
 import { ReplayToolbar } from '@/components/ReplayToolbar';
+import { DrawingToolbar } from '@/components/DrawingToolbar';
 import { Chart } from '@/components/Chart';
 import { TradePanel } from '@/components/TradePanel';
 import { TradeHistory } from '@/components/TradeHistory';
@@ -14,6 +15,8 @@ export default function Home() {
   const fetchMarketData = useTradingSimulatorStore((s) => s.fetchMarketData);
   const candles = useTradingSimulatorStore((s) => s.candles);
   const replayStatus = useTradingSimulatorStore((s) => s.replayStatus);
+  const activeTool = useTradingSimulatorStore((s) => s.activeTool);
+  const setActiveTool = useTradingSimulatorStore((s) => s.setActiveTool);
   const play = useTradingSimulatorStore((s) => s.play);
   const pause = useTradingSimulatorStore((s) => s.pause);
   const stepForward = useTradingSimulatorStore((s) => s.stepForward);
@@ -35,7 +38,7 @@ export default function Home() {
   // Global Ergonomic Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore keyboard shortcuts when typing in inputs
+      // Ignore keyboard shortcuts when typing in inputs or textareas
       const target = e.target as HTMLElement;
       if (
         target.tagName === 'INPUT' ||
@@ -58,6 +61,14 @@ export default function Home() {
       } else if (e.code === 'KeyR' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
         resetReplay();
+      } else if (e.code === 'KeyC' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        setActiveTool(activeTool === 'bar_replay' ? 'cursor' : 'bar_replay');
+      } else if (e.code === 'KeyV' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        setActiveTool('cursor');
+      } else if (e.code === 'Escape') {
+        setActiveTool('cursor');
       }
     };
 
@@ -65,7 +76,7 @@ export default function Home() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [replayStatus, play, pause, stepForward, resetReplay]);
+  }, [replayStatus, play, pause, stepForward, resetReplay, activeTool, setActiveTool]);
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#08090c] font-sans text-neutral-100 select-none">
@@ -79,8 +90,12 @@ export default function Home() {
       <div className="flex flex-1 flex-col lg:flex-row overflow-hidden">
         {/* Left Stage: Candlestick Chart & Bottom Trade Ledger */}
         <div className="flex flex-1 flex-col min-w-0 overflow-hidden border-r border-[#1c2230]">
-          {/* Main Chart Canvas */}
-          <div className="flex-1 relative min-h-[360px]">
+          {/* Main Chart Canvas with Left Drawing Toolbar */}
+          <div className="flex-1 relative min-h-[360px] flex flex-row overflow-hidden">
+            {/* TradingView-style Left Drawing Toolbar */}
+            <DrawingToolbar />
+
+            {/* TradingView Chart Canvas & Overlay */}
             <Chart />
           </div>
 

@@ -18,6 +18,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDataSelector }) => {
   const currentTimeframe = useTradingSimulatorStore((s) => s.currentTimeframe);
   const changeTimeframe = useTradingSimulatorStore((s) => s.changeTimeframe);
   const isLoadingData = useTradingSimulatorStore((s) => s.isLoadingData);
+  const isLiveMode = useTradingSimulatorStore((s) => s.isLiveMode);
 
   const formatUtcClock = (timestamp?: number) => {
     if (!timestamp) return '----:--:-- --:--:-- UTC';
@@ -110,14 +111,14 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDataSelector }) => {
         </div>
       </div>
 
-      {/* Center: High Visibility Virtual Market Clock */}
+      {/* Center: High Visibility Virtual / Live Market Clock */}
       <div className="hidden md:flex items-center space-x-3 rounded-lg border border-[#1e2638] bg-[#10141f] px-3.5 py-1 shadow-inner">
-        <Clock className={`h-4 w-4 ${replayStatus === 'playing' ? 'text-emerald-400 animate-pulse' : 'text-neutral-400'}`} />
+        <Clock className={`h-4 w-4 ${isLiveMode ? 'text-emerald-400 animate-pulse' : (replayStatus === 'playing' ? 'text-emerald-400 animate-pulse' : 'text-neutral-400')}`} />
         <div className="flex flex-col">
           <div className="flex items-center justify-between text-[9px] font-semibold uppercase tracking-wider text-neutral-400">
-            <span>Simulated Market Clock</span>
-            <span className="text-amber-400 font-mono">
-              {progressPercent}% completed
+            <span>{isLiveMode ? 'Live Market Clock' : 'Simulated Market Clock'}</span>
+            <span className={isLiveMode ? 'text-emerald-400 font-mono' : 'text-amber-400 font-mono'}>
+              {isLiveMode ? '● REAL-TIME' : `${progressPercent}% completed`}
             </span>
           </div>
           <span className="font-mono text-xs font-bold tracking-tight text-white tabular-nums">

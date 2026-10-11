@@ -7,6 +7,7 @@ export interface MarketDataProvider {
     candles: Candle[];
     metadata: DatasetMetadata;
   }>;
+  fetchLatestCandles?(timeframe: string, limit?: number): Promise<Candle[]>;
 }
 
 export interface MarketDataApiResponse {
