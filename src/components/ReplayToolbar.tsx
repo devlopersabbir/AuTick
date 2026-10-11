@@ -53,23 +53,23 @@ export const ReplayToolbar: React.FC = () => {
   const session = getSessionInfo(currentTimestamp);
 
   return (
-    <div className="flex flex-col md:flex-row items-center justify-between gap-3 border-b border-[#1c2230] bg-[#0d1017]/95 px-4 py-2 text-neutral-200">
+    <div className="flex flex-col items-stretch justify-between gap-3 border-b border-[#252c36] bg-[#11151b] px-5 py-3 text-neutral-200 md:flex-row md:items-center">
       {/* Primary Deck: Playback controls or Live Mode Switch */}
-      <div className="flex items-center space-x-2.5">
+      <div className="flex flex-wrap items-center gap-2">
         {isLiveMode ? (
           /* Live Market Status & Bar Replay Cut Trigger */
-          <div className="flex items-center space-x-3">
-            <div className="flex items-center space-x-1.5 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-lg text-emerald-400 font-bold text-xs">
-              <Radio className="h-3.5 w-3.5 animate-spin" />
-              <span>LIVE FEED ACTIVE</span>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-300">
+              <Radio className="h-4 w-4" />
+              <span>Live feed</span>
             </div>
 
             <button
               onClick={() => setActiveTool(activeTool === 'bar_replay' ? 'cursor' : 'bar_replay')}
-              className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-md ${
+              className={`flex min-h-10 items-center gap-2 rounded-md border px-4 py-2 text-sm font-semibold transition-colors cursor-pointer ${
                 activeTool === 'bar_replay'
-                  ? 'bg-amber-500 text-black shadow-amber-500/30 font-extrabold animate-pulse'
-                  : 'bg-[#161d2d] hover:bg-[#1e273d] text-amber-300 border border-amber-500/40 hover:border-amber-500/70'
+                  ? 'border-[#d6aa5b] bg-[#d6aa5b] text-[#15181c]'
+                  : 'border-[#4b412e] bg-[#201d17] text-[#e3bd76] hover:border-[#d6aa5b]'
               }`}
             >
               <Scissors className="h-3.5 w-3.5" />
@@ -88,10 +88,10 @@ export const ReplayToolbar: React.FC = () => {
                 onClick={pause}
                 disabled={!hasData}
                 title="Pause replay [Space]"
-                className="flex items-center space-x-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/50 px-4 py-1.5 text-xs font-bold transition-all shadow-md shadow-amber-950/40 cursor-pointer disabled:opacity-40"
+                className="flex min-h-10 items-center gap-2 rounded-md border border-[#4b412e] bg-[#201d17] px-4 py-2 text-sm font-semibold text-[#e3bd76] transition-colors hover:bg-[#2a251c] cursor-pointer disabled:opacity-40"
               >
-                <Pause className="h-4 w-4 fill-current animate-pulse" />
-                <span>PAUSE</span>
+                <Pause className="h-4 w-4 fill-current" />
+                <span>Pause</span>
                 <kbd className="hidden sm:inline-block rounded bg-amber-500/20 border border-amber-500/40 px-1 py-0.2 text-[10px] text-amber-200">
                   Space
                 </kbd>
@@ -101,10 +101,10 @@ export const ReplayToolbar: React.FC = () => {
                 onClick={play}
                 disabled={!hasData || isEnded}
                 title="Start replay [Space]"
-                className="flex items-center space-x-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-1.5 text-xs font-bold transition-all shadow-md shadow-emerald-950/60 cursor-pointer disabled:opacity-40"
+                className="flex min-h-10 items-center gap-2 rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-600 cursor-pointer disabled:opacity-40"
               >
                 <Play className="h-4 w-4 fill-current" />
-                <span>PLAY</span>
+                <span>Play</span>
                 <kbd className="hidden sm:inline-block rounded bg-emerald-700/60 px-1 py-0.2 text-[10px] text-emerald-100">
                   Space
                 </kbd>
@@ -116,7 +116,7 @@ export const ReplayToolbar: React.FC = () => {
               onClick={stepForward}
               disabled={!hasData || isEnded}
               title="Step forward 1 candle [→]"
-              className="flex items-center space-x-1.5 rounded-lg bg-[#141926] hover:bg-[#1a2133] text-neutral-200 border border-[#232b3d] hover:border-[#333e56] px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer disabled:opacity-40"
+              className="flex min-h-10 items-center gap-2 rounded-md border border-[#303844] bg-[#171c23] px-3 py-2 text-sm font-medium text-neutral-200 transition-colors hover:bg-[#202630] cursor-pointer disabled:opacity-40"
             >
               <StepForward className="h-3.5 w-3.5" />
               <span>Step</span>
@@ -130,7 +130,7 @@ export const ReplayToolbar: React.FC = () => {
               onClick={resetReplay}
               disabled={!hasData}
               title="Reset to beginning of slice [R]"
-              className="flex items-center space-x-1.5 rounded-lg bg-[#141926] hover:bg-[#1a2133] text-neutral-300 border border-[#232b3d] hover:border-[#333e56] px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer disabled:opacity-40"
+              className="flex min-h-10 items-center gap-2 rounded-md border border-[#303844] bg-[#171c23] px-3 py-2 text-sm font-medium text-neutral-300 transition-colors hover:bg-[#202630] cursor-pointer disabled:opacity-40"
             >
               <RotateCcw className="h-3.5 w-3.5" />
               <span>Reset</span>
@@ -139,16 +139,16 @@ export const ReplayToolbar: React.FC = () => {
             <div className="h-5 w-px bg-[#1c2230] hidden sm:block" />
 
             {/* Speed Selector */}
-            <div className="flex items-center space-x-1 rounded-lg border border-[#1e2638] bg-[#10141f] p-1">
+            <div className="flex items-center gap-1 rounded-md border border-[#303844] bg-[#14181e] p-1">
               <FastForward className="h-3 w-3 text-neutral-400 ml-1 mr-0.5" />
               {speeds.map((spd) => (
                 <button
                   key={spd}
                   onClick={() => setPlaybackSpeed(spd)}
-                  className={`rounded px-2 py-0.5 text-xs font-bold transition-all cursor-pointer ${
+                  className={`min-w-9 rounded px-2 py-1 text-sm font-semibold transition-colors cursor-pointer ${
                     playbackSpeed === spd
-                      ? 'bg-amber-500 text-black shadow-sm font-extrabold'
-                      : 'text-neutral-400 hover:text-white hover:bg-[#161c2b]'
+                      ? 'bg-[#d6aa5b] text-[#15181c]'
+                      : 'text-neutral-400 hover:bg-[#242a33] hover:text-white'
                   }`}
                 >
                   {spd}×
@@ -160,7 +160,7 @@ export const ReplayToolbar: React.FC = () => {
             <button
               onClick={returnToLive}
               title="Exit backtest mode and return to real-time live market"
-              className="flex items-center space-x-1.5 rounded-lg bg-emerald-600/90 hover:bg-emerald-500 text-white px-3 py-1.5 text-xs font-bold transition-all cursor-pointer shadow-md shadow-emerald-950/50"
+              className="flex min-h-10 items-center gap-2 rounded-md bg-emerald-700 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-600 cursor-pointer"
             >
               <Radio className="h-3 w-3" />
               <span>Return to Live</span>
@@ -170,8 +170,8 @@ export const ReplayToolbar: React.FC = () => {
       </div>
 
       {/* Center: Scrubber Timeline Slider & Session Indicator Group */}
-      <div className="flex flex-1 items-center space-x-3 w-full md:w-auto px-2 min-w-[280px] max-w-2xl">
-        <span className="font-mono text-xs text-neutral-400 tabular-nums">
+      <div className="flex w-full min-w-[280px] max-w-2xl flex-1 items-center gap-3 px-1 md:w-auto">
+        <span className="font-mono text-sm text-neutral-400 tabular-nums">
           {currentIndex >= 0 ? `${currentIndex + 1}` : '0'}/{total}
         </span>
 
@@ -185,7 +185,7 @@ export const ReplayToolbar: React.FC = () => {
             onChange={handleSliderChange}
             disabled={!hasData}
             aria-label="Replay progress scrubber"
-            className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-[#141926] border border-[#232b3d] accent-amber-500 disabled:opacity-30"
+            className="h-2 w-full cursor-pointer appearance-none rounded-full bg-[#242a33] accent-[#d6aa5b] disabled:opacity-30"
           />
         </div>
 
@@ -195,26 +195,26 @@ export const ReplayToolbar: React.FC = () => {
             <>
               {/* Market Status & Active Session Pill */}
               {session.isMarketOpen ? (
-                <span className="flex items-center space-x-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/40 px-2.5 py-1 text-[11px] font-bold text-emerald-400 font-mono">
+                <span className="flex items-center gap-2 rounded-md bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
                   <span>{session.primarySession}</span>
                 </span>
               ) : (
-                <span className="flex items-center space-x-1.5 rounded-lg bg-rose-500/15 border border-rose-500/40 px-2.5 py-1 text-[11px] font-bold text-rose-400 font-mono animate-pulse">
+                <span className="flex items-center gap-2 rounded-md bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-300">
                   <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
                   <span>CLOSED ({session.closeReason})</span>
                 </span>
               )}
 
               {/* New York AM/PM Time Badge */}
-              <div className="font-mono text-xs font-semibold text-neutral-100 tabular-nums bg-[#10141f] border border-[#1e2638] px-2.5 py-1 rounded-lg flex items-center space-x-1.5 shadow-sm">
+              <div className="flex items-center gap-2 rounded-md border border-[#303844] bg-[#14181e] px-3 py-1.5 font-mono text-sm font-medium text-neutral-100 tabular-nums">
                 <span className="text-[10px] text-amber-400 font-bold">🗽 NY</span>
                 <span className="font-bold text-white tracking-wide">{session.nyTime12}</span>
                 <span className="text-[10px] text-neutral-400 hidden lg:inline-block">({session.weekday})</span>
               </div>
             </>
           ) : (
-            <span className="font-mono text-xs text-neutral-500 tabular-nums bg-[#10141f] border border-[#1e2638] px-2.5 py-1 rounded-lg">
+            <span className="rounded-md border border-[#303844] bg-[#14181e] px-3 py-1.5 font-mono text-sm text-neutral-500 tabular-nums">
               --:-- --
             </span>
           )}
@@ -222,19 +222,19 @@ export const ReplayToolbar: React.FC = () => {
       </div>
 
       {/* Right: Global Sessions Chips (Sydney, Tokyo, London, New York) */}
-      <div className="flex items-center space-x-2 text-xs shrink-0">
+      <div className="flex shrink-0 items-center gap-2 text-sm">
         {session.sessions.length > 0 && (
-          <div className="hidden 2xl:flex items-center space-x-1 bg-[#10141f] border border-[#1e2638] p-0.5 rounded-lg text-[10px]">
+          <div className="hidden 2xl:flex items-center gap-1 rounded-md border border-[#303844] bg-[#14181e] p-1 text-xs">
             {session.sessions.map((s) => (
               <span
                 key={s.id}
                 title={`${s.name} (${s.hoursNy} NY)`}
-                className={`px-1.5 py-0.5 rounded font-mono font-semibold flex items-center space-x-1 transition-all ${
+                className={`flex items-center gap-1.5 rounded px-2 py-1 font-mono font-medium transition-colors ${
                   s.isOpen
                     ? s.id === 'new_york'
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold shadow-sm shadow-amber-950/40'
-                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold shadow-sm shadow-emerald-950/40'
-                    : 'text-neutral-500 opacity-60'
+                      ? 'bg-[#30291d] text-[#e3bd76]'
+                      : 'bg-[#172723] text-emerald-300'
+                    : 'text-neutral-500'
                 }`}
               >
                 <span>{s.icon}</span>
@@ -246,12 +246,12 @@ export const ReplayToolbar: React.FC = () => {
         )}
 
         {isEnded ? (
-          <span className="flex items-center space-x-1 rounded-lg bg-amber-500/15 border border-amber-500/40 px-2.5 py-1 text-xs font-semibold text-amber-400 animate-pulse">
+          <span className="flex items-center gap-2 rounded-md bg-[#30291d] px-3 py-1.5 text-sm font-medium text-[#e3bd76]">
             <AlertCircle className="h-3.5 w-3.5" />
             <span>Dataset Completed</span>
           </span>
         ) : (
-          <span className="rounded bg-[#10141f] border border-[#1e2638] px-2 py-1 text-[11px] font-mono text-neutral-400">
+          <span className="rounded-md border border-[#303844] bg-[#14181e] px-3 py-1.5 font-mono text-xs text-neutral-400">
             {currentTimeframe.toUpperCase()} Candles
           </span>
         )}

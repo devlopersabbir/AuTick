@@ -120,7 +120,7 @@ export const DrawingToolbar: React.FC = () => {
   return (
     <aside
       aria-label="TradingView Tools"
-      className="flex flex-col items-center w-11 md:w-12 bg-[#0c0e14] border-r border-[#1c2230] py-2 px-1 select-none z-20 shrink-0 gap-1.5 justify-between"
+      className="z-20 flex w-12 shrink-0 select-none flex-col items-center justify-between gap-2 border-r border-[#252c36] bg-[#11151b] px-1.5 py-3 md:w-14"
     >
       <div className="flex flex-col items-center w-full gap-1">
         {tools.map((tool, idx) => {
@@ -139,13 +139,13 @@ export const DrawingToolbar: React.FC = () => {
                   type="button"
                   onClick={() => handleToolClick(tool.id)}
                   title={tool.label}
-                  className={`relative flex items-center justify-center w-8 h-8 md:w-9 md:h-9 rounded-lg border transition-all cursor-pointer ${
+                  className={`relative flex h-10 w-10 items-center justify-center rounded-md border transition-colors cursor-pointer ${
                     isActive
                       ? tool.highlightColor ||
-                        'text-amber-400 bg-amber-500/20 border-amber-500/50 shadow-md shadow-amber-500/20 font-bold'
+                        'text-[#e3bd76] bg-[#30291d] border-[#a78345] font-semibold'
                       : isReplayTool && !isLiveMode
-                      ? 'text-amber-400 bg-amber-500/10 border-amber-500/30'
-                      : 'text-neutral-400 hover:text-white hover:bg-[#161c2b] border-transparent'
+                      ? 'text-[#e3bd76] bg-[#201d17] border-[#4b412e]'
+                      : 'text-neutral-400 hover:text-white hover:bg-[#202630] border-transparent'
                   }`}
                 >
                   {tool.icon}
@@ -153,17 +153,16 @@ export const DrawingToolbar: React.FC = () => {
                   {/* Pulsing beacon if Cut Replay is active */}
                   {isReplayTool && isActive && (
                     <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-[#d6aa5b]"></span>
                     </span>
                   )}
                 </button>
 
                 {/* TradingView Flyout Tooltip */}
-                <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center space-x-1.5 whitespace-nowrap bg-[#161d2d] border border-[#232b3d] px-2.5 py-1 rounded-md text-[11px] font-medium text-white shadow-xl pointer-events-none z-50">
+                <div className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 hidden -translate-y-1/2 items-center gap-2 whitespace-nowrap rounded-md border border-[#343e4b] bg-[#171c23] px-3 py-2 text-sm font-medium text-white shadow-xl group-hover:flex">
                   <span>{tool.label}</span>
                   {tool.shortKey && (
-                    <kbd className="rounded bg-[#0c0e14] border border-[#2b354c] px-1 py-0.2 text-[9px] text-neutral-400 font-mono">
+                    <kbd className="rounded bg-[#101419] px-1.5 py-0.5 font-mono text-xs text-neutral-400">
                       {tool.shortKey}
                     </kbd>
                   )}
@@ -182,7 +181,7 @@ export const DrawingToolbar: React.FC = () => {
               type="button"
               onClick={unhideAllDrawings}
               title={`Unhide ${hiddenCount} hidden drawings`}
-              className="flex items-center justify-center w-8 h-8 rounded-lg text-amber-400 hover:bg-amber-500/15 border border-amber-500/30 transition-all cursor-pointer animate-pulse"
+              className="flex h-10 w-10 items-center justify-center rounded-md border border-[#4b412e] text-[#e3bd76] transition-colors hover:bg-[#201d17] cursor-pointer"
             >
               <span className="text-xs font-bold font-mono">👁️</span>
             </button>
@@ -198,11 +197,11 @@ export const DrawingToolbar: React.FC = () => {
             onClick={() => handleToolClick('clear')}
             disabled={drawings.length === 0}
             title={`Clear All Drawings (${drawings.length})`}
-            className="flex items-center justify-center w-8 h-8 rounded-lg text-neutral-400 hover:text-rose-400 hover:bg-rose-500/15 border border-transparent hover:border-rose-500/30 transition-all cursor-pointer disabled:opacity-30 disabled:pointer-events-none"
+            className="flex h-10 w-10 items-center justify-center rounded-md border border-transparent text-neutral-400 transition-colors hover:border-rose-500/30 hover:bg-rose-500/10 hover:text-rose-400 cursor-pointer disabled:opacity-30 disabled:pointer-events-none"
           >
             <Trash2 className="h-4 w-4" />
           </button>
-          <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center whitespace-nowrap bg-[#161d2d] border border-[#232b3d] px-2.5 py-1 rounded-md text-[11px] font-medium text-rose-300 shadow-xl pointer-events-none z-50">
+          <div className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 hidden -translate-y-1/2 items-center whitespace-nowrap rounded-md border border-[#343e4b] bg-[#171c23] px-3 py-2 text-sm font-medium text-rose-300 shadow-xl group-hover:flex">
             Clear {drawings.length} Drawings
           </div>
         </div>

@@ -81,7 +81,7 @@ export default function Home() {
   }, [replayStatus, play, pause, stepForward, resetReplay, activeTool, setActiveTool]);
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#08090c] font-sans text-neutral-100 select-none">
+    <div className="flex h-dvh min-h-[560px] w-screen flex-col overflow-hidden bg-[#0b0e12] font-sans text-neutral-100 max-lg:h-auto max-lg:min-h-dvh max-lg:overflow-y-auto">
       {/* Top Header Command Bar */}
       <Header onOpenBrokerModal={() => setIsBrokerModalOpen(true)} />
 
@@ -89,9 +89,9 @@ export default function Home() {
       <ReplayToolbar />
 
       {/* Main Terminal Grid */}
-      <div className="flex flex-1 flex-col lg:flex-row overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden lg:flex-row max-lg:overflow-visible">
         {/* Left Stage: Candlestick Chart & Bottom Trade Ledger */}
-        <div className="flex flex-1 flex-col min-w-0 overflow-hidden border-r border-[#1c2230]">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden border-r border-[#252c36] max-lg:overflow-visible">
           {/* Main Chart Canvas with Left Drawing Toolbar */}
           <div className="flex-1 relative min-h-[360px] flex flex-row overflow-hidden">
             {/* TradingView-style Left Drawing Toolbar */}

@@ -1,14 +1,14 @@
 @import "tailwindcss";
 
 :root {
-  --background: #08090c;
-  --foreground: #f1f5f9;
-  --surface-primary: #0d1017;
-  --surface-secondary: #131722;
-  --surface-tertiary: #1b202e;
-  --border-subtle: #1e2433;
-  --border-strong: #2a3245;
-  --color-gold: #f59e0b;
+  --background: #0b0e12;
+  --foreground: #e8ebf0;
+  --surface-primary: #11151b;
+  --surface-secondary: #171c23;
+  --surface-tertiary: #202630;
+  --border-subtle: #252c36;
+  --border-strong: #343e4b;
+  --color-gold: #d6aa5b;
   --color-bull: #089981;
   --color-bear: #f23645;
   --color-accent: #2962ff;
@@ -30,8 +30,18 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   overflow: hidden;
-  user-select: none;
-  -webkit-font-smoothing: antialiased;
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: auto;
+  text-rendering: optimizeLegibility;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
 }
 
 /* Tabular numbers for financial tick rates */
@@ -41,8 +51,8 @@ body {
 
 /* Custom scrollbars for trading terminal aesthetic */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -58,15 +68,14 @@ body {
   background: #3b455c;
 }
 
-/* Glow effects */
 .glow-gold {
-  box-shadow: 0 0 15px -3px rgba(245, 158, 11, 0.25);
+  box-shadow: inset 0 0 0 1px rgba(214, 170, 91, 0.12);
 }
 
 .glow-bull {
-  box-shadow: 0 0 15px -3px rgba(8, 153, 129, 0.3);
+  box-shadow: inset 0 0 0 1px rgba(8, 153, 129, 0.12);
 }
 
 .glow-bear {
-  box-shadow: 0 0 15px -3px rgba(242, 54, 69, 0.3);
+  box-shadow: inset 0 0 0 1px rgba(242, 54, 69, 0.12);
 }

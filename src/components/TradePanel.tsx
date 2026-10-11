@@ -157,47 +157,47 @@ export const TradePanel: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-full bg-[#0a0d14] border-l border-[#1c2230] text-neutral-100 p-4 space-y-4 overflow-y-auto">
+    <div className="flex h-full flex-col gap-5 overflow-y-auto border-l border-[#252c36] bg-[#101318] p-5 text-neutral-100">
       {/* Account Performance HUD Card */}
-      <div className="rounded-xl border border-[#1e2638] bg-gradient-to-b from-[#121624] to-[#0d101a] p-4 shadow-lg space-y-3">
+      <div className="space-y-4 rounded-md border border-[#303844] bg-[#151a20] p-4">
         <div className="flex items-center justify-between text-neutral-400">
-          <div className="flex items-center space-x-1.5 text-xs font-semibold uppercase tracking-wider">
-            <Wallet className="h-3.5 w-3.5 text-amber-400" />
+          <div className="flex items-center gap-2 text-sm font-semibold text-neutral-200">
+            <Wallet className="h-4 w-4 text-[#d6aa5b]" />
             <span>Simulated Account</span>
           </div>
-          <span className="rounded bg-[#1a2030] px-2 py-0.5 text-[10px] font-mono text-neutral-300">
+          <span className="rounded bg-[#202630] px-2 py-1 text-xs text-neutral-300">
             Win Rate: <strong className="text-white">{winRate}%</strong> ({winningTrades}/{totalTrades})
           </span>
         </div>
 
         {/* Equity & Balance Big Numbers */}
-        <div className="grid grid-cols-2 gap-3 pt-1">
-          <div className="rounded-lg bg-[#0a0d14]/80 border border-[#1b2233] p-2.5">
-            <span className="text-[10px] text-neutral-400 font-medium block">Net Equity</span>
-            <div className={`font-mono text-base font-extrabold tabular-nums ${equity >= balance ? 'text-emerald-400' : 'text-rose-400'}`}>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-md border border-[#29313b] bg-[#101419] p-3">
+            <span className="mb-1 block text-xs font-medium text-neutral-400">Net Equity</span>
+            <div className={`font-mono text-lg font-semibold tabular-nums ${equity >= balance ? 'text-emerald-300' : 'text-rose-300'}`}>
               ${equity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           </div>
 
-          <div className="rounded-lg bg-[#0a0d14]/80 border border-[#1b2233] p-2.5">
-            <span className="text-[10px] text-neutral-400 font-medium block">Cash Balance</span>
-            <div className="font-mono text-base font-extrabold text-white tabular-nums">
+          <div className="rounded-md border border-[#29313b] bg-[#101419] p-3">
+            <span className="mb-1 block text-xs font-medium text-neutral-400">Cash Balance</span>
+            <div className="font-mono text-lg font-semibold text-white tabular-nums">
               ${balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           </div>
         </div>
 
         {/* Realized vs Unrealized P&L */}
-        <div className="grid grid-cols-2 gap-2 text-xs pt-0.5">
-          <div className="flex items-center justify-between px-2 py-1.5 rounded bg-[#0f131f] border border-[#182030]">
-            <span className="text-[11px] text-neutral-400">Realized:</span>
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="flex items-center justify-between rounded-md border border-[#29313b] bg-[#12171d] px-3 py-2">
+            <span className="text-neutral-400">Realized</span>
             <span className={`font-mono font-bold tabular-nums ${totalRealizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
               {totalRealizedPnl >= 0 ? '+' : ''}${totalRealizedPnl.toFixed(2)}
             </span>
           </div>
 
-          <div className="flex items-center justify-between px-2 py-1.5 rounded bg-[#0f131f] border border-[#182030]">
-            <span className="text-[11px] text-neutral-400">Unrealized:</span>
+          <div className="flex items-center justify-between rounded-md border border-[#29313b] bg-[#12171d] px-3 py-2">
+            <span className="text-neutral-400">Unrealized</span>
             <span className={`font-mono font-bold tabular-nums ${
               openPosition
                 ? openPosition.unrealizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'
@@ -213,7 +213,7 @@ export const TradePanel: React.FC = () => {
 
       {/* Active Position Spotlight Card */}
       {isPositionOpen && openPosition ? (
-        <div className="rounded-xl border border-amber-500/40 bg-gradient-to-b from-[#161c2b] to-[#0e121c] p-4 space-y-3.5 shadow-xl glow-gold">
+        <div className="space-y-4 rounded-md border border-[#3a453f] bg-[#151b1a] p-4">
           <div className="flex items-center justify-between border-b border-[#222b3d] pb-2.5">
             <div className="flex items-center space-x-2">
               <span className={`px-2.5 py-0.5 rounded-md text-xs font-extrabold uppercase tracking-wide flex items-center space-x-1 ${
@@ -231,7 +231,7 @@ export const TradePanel: React.FC = () => {
 
             {/* Live Unrealized P&L Display */}
             <div className="text-right">
-              <div className={`font-mono text-base font-extrabold tabular-nums ${
+              <div className={`font-mono text-lg font-semibold tabular-nums ${
                 openPosition.unrealizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'
               }`}>
                 {openPosition.unrealizedPnl >= 0 ? '+' : ''}${openPosition.unrealizedPnl.toFixed(2)}
@@ -249,26 +249,26 @@ export const TradePanel: React.FC = () => {
           </div>
 
           {/* Position Parameters */}
-          <div className="grid grid-cols-2 gap-2 text-xs font-mono tabular-nums">
-            <div className="rounded bg-[#0c101a] p-2 border border-[#1a2233]">
-              <span className="text-[10px] text-neutral-500 block">Entry Price</span>
+          <div className="grid grid-cols-2 gap-2 text-sm font-mono tabular-nums">
+            <div className="rounded bg-[#101419] p-3">
+              <span className="mb-1 block text-xs text-neutral-500">Entry Price</span>
               <span className="text-neutral-200 font-semibold">${openPosition.entryPrice.toFixed(2)}</span>
             </div>
-            <div className="rounded bg-[#0c101a] p-2 border border-[#1a2233]">
-              <span className="text-[10px] text-neutral-500 block">Market Price</span>
+            <div className="rounded bg-[#101419] p-3">
+              <span className="mb-1 block text-xs text-neutral-500">Market Price</span>
               <span className="text-white font-bold">${openPosition.currentPrice.toFixed(2)}</span>
             </div>
-            <div className="rounded bg-[#0c101a] p-2 border border-[#1a2233]">
-              <span className="text-[10px] text-neutral-500 block flex items-center gap-1">
-                <Shield className="h-2.5 w-2.5 text-rose-400" /> Stop Loss
+            <div className="rounded bg-[#101419] p-3">
+              <span className="mb-1 flex items-center gap-1 text-xs text-neutral-500">
+                <Shield className="h-3 w-3 text-rose-400" /> Stop Loss
               </span>
               <span className="text-rose-400 font-medium">
                 {openPosition.stopLoss ? `$${openPosition.stopLoss.toFixed(2)}` : 'None'}
               </span>
             </div>
-            <div className="rounded bg-[#0c101a] p-2 border border-[#1a2233]">
-              <span className="text-[10px] text-neutral-500 block flex items-center gap-1">
-                <Target className="h-2.5 w-2.5 text-emerald-400" /> Take Profit
+            <div className="rounded bg-[#101419] p-3">
+              <span className="mb-1 flex items-center gap-1 text-xs text-neutral-500">
+                <Target className="h-3 w-3 text-emerald-400" /> Take Profit
               </span>
               <span className="text-emerald-400 font-medium">
                 {openPosition.takeProfit ? `$${openPosition.takeProfit.toFixed(2)}` : 'None'}
@@ -279,14 +279,14 @@ export const TradePanel: React.FC = () => {
           {/* Visual Progress Bar to SL / TP */}
           {openPosition.stopLoss && openPosition.takeProfit && (
             <div className="space-y-1">
-              <div className="flex justify-between text-[10px] text-neutral-400 font-mono">
+              <div className="flex justify-between text-xs text-neutral-400 font-mono">
                 <span className="text-rose-400">SL: ${openPosition.stopLoss.toFixed(0)}</span>
                 <span className="text-neutral-300">Progress</span>
                 <span className="text-emerald-400">TP: ${openPosition.takeProfit.toFixed(0)}</span>
               </div>
-              <div className="h-2 w-full rounded-full bg-[#182030] overflow-hidden p-0.5 border border-[#222b3d]">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-[#252c36]">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-rose-500 via-amber-400 to-emerald-400 transition-all duration-300"
+                  className="h-full rounded-full bg-emerald-500 transition-all duration-300"
                   style={{ width: `${positionProgressPercent}%` }}
                 />
               </div>
@@ -296,7 +296,7 @@ export const TradePanel: React.FC = () => {
           {/* Prominent Close Button */}
           <button
             onClick={() => closeCurrentPosition()}
-            className="w-full flex items-center justify-center space-x-2 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition-all shadow-lg shadow-rose-950/60 cursor-pointer"
+            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-rose-700 py-3 text-sm font-semibold text-white transition-colors hover:bg-rose-600 cursor-pointer"
           >
             <XCircle className="h-4 w-4" />
             <span>CLOSE POSITION @ MARKET (${openPosition.currentPrice.toFixed(2)})</span>
@@ -305,15 +305,15 @@ export const TradePanel: React.FC = () => {
       ) : null}
 
       {/* Order Placement Terminal Form */}
-      <div className={`rounded-xl border border-[#1e2638] bg-[#0d101a] p-4 space-y-4 ${
-        isPositionOpen ? 'opacity-40 pointer-events-none' : ''
+      <div className={`space-y-4 rounded-md border border-[#303844] bg-[#151a20] p-4 ${
+        isPositionOpen ? 'pointer-events-none opacity-50' : ''
       }`}>
-        <div className="flex items-center justify-between border-b border-[#1c2230] pb-2">
-          <span className="text-xs font-bold text-neutral-300 uppercase tracking-wider flex items-center gap-1.5">
-            <Coins className="h-3.5 w-3.5 text-amber-400" />
+        <div className="flex items-center justify-between border-b border-[#303844] pb-3">
+          <span className="flex items-center gap-2 text-sm font-semibold text-neutral-200">
+            <Coins className="h-4 w-4 text-[#d6aa5b]" />
             <span>Order Entry Terminal</span>
           </span>
-          <span className="text-[10px] text-neutral-500 font-mono">1 Position Max</span>
+          <span className="font-mono text-xs text-neutral-500">One open position</span>
         </div>
 
         {/* Big Side Toggle Buttons */}
@@ -321,17 +321,17 @@ export const TradePanel: React.FC = () => {
           <button
             onClick={() => setSelectedSide('LONG')}
             disabled={isPositionOpen}
-            className={`flex flex-col items-center justify-center py-2.5 rounded-lg border text-xs font-extrabold transition-all cursor-pointer ${
+            className={`flex min-h-[76px] flex-col items-center justify-center rounded-md border py-3 text-sm font-semibold transition-colors cursor-pointer ${
               selectedSide === 'LONG'
-                ? 'bg-emerald-600/20 border-emerald-500 text-emerald-400 glow-bull'
-                : 'bg-[#10141f] border-[#1e2638] text-neutral-400 hover:text-neutral-200'
+                ? 'border-emerald-600/50 bg-emerald-950/40 text-emerald-300'
+                : 'border-[#303844] bg-[#11151b] text-neutral-400 hover:text-neutral-200'
             }`}
           >
             <div className="flex items-center space-x-1">
               <TrendingUp className="h-3.5 w-3.5" />
               <span>BUY / LONG</span>
             </div>
-            <span className="text-[10px] font-normal text-neutral-400 font-mono">
+            <span className="mt-1 text-xs font-normal text-neutral-400 font-mono">
               ${currentPrice ? currentPrice.toFixed(2) : '--'}
             </span>
           </button>
@@ -339,17 +339,17 @@ export const TradePanel: React.FC = () => {
           <button
             onClick={() => setSelectedSide('SHORT')}
             disabled={isPositionOpen}
-            className={`flex flex-col items-center justify-center py-2.5 rounded-lg border text-xs font-extrabold transition-all cursor-pointer ${
+            className={`flex min-h-[76px] flex-col items-center justify-center rounded-md border py-3 text-sm font-semibold transition-colors cursor-pointer ${
               selectedSide === 'SHORT'
-                ? 'bg-rose-600/20 border-rose-500 text-rose-400 glow-bear'
-                : 'bg-[#10141f] border-[#1e2638] text-neutral-400 hover:text-neutral-200'
+                ? 'border-rose-600/50 bg-rose-950/40 text-rose-300'
+                : 'border-[#303844] bg-[#11151b] text-neutral-400 hover:text-neutral-200'
             }`}
           >
             <div className="flex items-center space-x-1">
               <TrendingDown className="h-3.5 w-3.5" />
               <span>SELL / SHORT</span>
             </div>
-            <span className="text-[10px] font-normal text-neutral-400 font-mono">
+            <span className="mt-1 text-xs font-normal text-neutral-400 font-mono">
               ${currentPrice ? currentPrice.toFixed(2) : '--'}
             </span>
           </button>
@@ -371,7 +371,7 @@ export const TradePanel: React.FC = () => {
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
               disabled={isPositionOpen}
-              className="w-full rounded-lg border border-[#232b3d] bg-[#121624] px-3.5 py-2 font-mono text-xs text-white focus:border-amber-500 focus:outline-none tabular-nums"
+              className="w-full rounded-md border border-[#303844] bg-[#11151b] px-3.5 py-3 font-mono text-sm text-white focus:border-[#d6aa5b] focus:outline-none tabular-nums"
             />
             <span className="absolute right-3 top-2 text-xs font-mono text-neutral-400 font-semibold pointer-events-none">
               oz
@@ -384,7 +384,7 @@ export const TradePanel: React.FC = () => {
                 type="button"
                 onClick={() => setQuantity(q)}
                 disabled={isPositionOpen}
-                className="flex-1 rounded-md border border-[#1e2638] bg-[#10141f] hover:bg-[#182030] py-1 text-[11px] font-mono text-neutral-300 transition-colors cursor-pointer"
+                className="min-h-9 flex-1 rounded-md border border-[#303844] bg-[#11151b] py-2 text-xs font-mono text-neutral-300 transition-colors hover:bg-[#202630] cursor-pointer"
               >
                 {q}
               </button>
@@ -418,7 +418,7 @@ export const TradePanel: React.FC = () => {
             value={stopLoss}
             onChange={(e) => setStopLoss(e.target.value)}
             disabled={isPositionOpen}
-            className="w-full rounded-lg border border-[#232b3d] bg-[#121624] px-3.5 py-2 font-mono text-xs text-white focus:border-rose-500 focus:outline-none tabular-nums"
+            className="w-full rounded-md border border-[#303844] bg-[#11151b] px-3.5 py-3 font-mono text-sm text-white focus:border-rose-500 focus:outline-none tabular-nums"
           />
           <div className="flex gap-1.5 pt-0.5">
             {[5, 10, 20].map((d) => (
@@ -427,7 +427,7 @@ export const TradePanel: React.FC = () => {
                 type="button"
                 onClick={() => applyPresetSl(d)}
                 disabled={isPositionOpen || !currentPrice}
-                className="flex-1 rounded-md border border-[#1e2638] bg-[#10141f] hover:bg-rose-500/10 hover:border-rose-500/30 py-1 text-[11px] font-mono text-neutral-400 hover:text-rose-300 transition-colors cursor-pointer"
+                className="min-h-9 flex-1 rounded-md border border-[#303844] bg-[#11151b] py-2 text-xs font-mono text-neutral-400 hover:border-rose-500/30 hover:bg-rose-500/10 hover:text-rose-300 transition-colors cursor-pointer"
               >
                 -${d}
               </button>
@@ -461,7 +461,7 @@ export const TradePanel: React.FC = () => {
             value={takeProfit}
             onChange={(e) => setTakeProfit(e.target.value)}
             disabled={isPositionOpen}
-            className="w-full rounded-lg border border-[#232b3d] bg-[#121624] px-3.5 py-2 font-mono text-xs text-white focus:border-emerald-500 focus:outline-none tabular-nums"
+            className="w-full rounded-md border border-[#303844] bg-[#11151b] px-3.5 py-3 font-mono text-sm text-white focus:border-emerald-500 focus:outline-none tabular-nums"
           />
           <div className="flex gap-1.5 pt-0.5">
             {[10, 20, 40].map((d) => (
@@ -470,7 +470,7 @@ export const TradePanel: React.FC = () => {
                 type="button"
                 onClick={() => applyPresetTp(d)}
                 disabled={isPositionOpen || !currentPrice}
-                className="flex-1 rounded-md border border-[#1e2638] bg-[#10141f] hover:bg-emerald-500/10 hover:border-emerald-500/30 py-1 text-[11px] font-mono text-neutral-400 hover:text-emerald-300 transition-colors cursor-pointer"
+                className="min-h-9 flex-1 rounded-md border border-[#303844] bg-[#11151b] py-2 text-xs font-mono text-neutral-400 hover:border-emerald-500/30 hover:bg-emerald-500/10 hover:text-emerald-300 transition-colors cursor-pointer"
               >
                 +${d}
               </button>
@@ -480,7 +480,7 @@ export const TradePanel: React.FC = () => {
 
         {/* Risk / Reward ratio visual card */}
         {riskRewardRatio && (
-          <div className="flex items-center justify-between rounded-lg bg-[#111624] border border-[#1f283d] px-3 py-2 text-xs">
+          <div className="flex items-center justify-between rounded-md border border-[#303844] bg-[#11151b] px-3 py-3 text-sm">
             <span className="text-neutral-400 font-medium">Risk / Reward Ratio</span>
             <span className="font-mono font-extrabold text-amber-400">{riskRewardRatio}</span>
           </div>
@@ -490,13 +490,13 @@ export const TradePanel: React.FC = () => {
         <button
           onClick={handleOpenPosition}
           disabled={isPositionOpen || !currentCandle}
-          className={`w-full py-3 rounded-lg font-extrabold text-xs transition-all shadow-xl cursor-pointer flex items-center justify-center space-x-2 ${
+          className={`flex min-h-12 w-full items-center justify-center gap-2 rounded-md py-3 text-sm font-semibold transition-colors cursor-pointer ${
             selectedSide === 'LONG'
-              ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white shadow-emerald-950/50'
-              : 'bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white shadow-rose-950/50'
+              ? 'bg-emerald-700 text-white hover:bg-emerald-600'
+              : 'bg-rose-700 text-white hover:bg-rose-600'
           }`}
         >
-          <span>{isPositionOpen ? 'Position Already Active' : `SUBMIT ${selectedSide} ORDER`}</span>
+          <span>{isPositionOpen ? 'Position already active' : `Place ${selectedSide.toLowerCase()} order`}</span>
           <ArrowRight className="h-4 w-4" />
         </button>
       </div>

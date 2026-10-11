@@ -39,25 +39,25 @@ export const TradeHistory: React.FC = () => {
   const avgLoss = losingTrades.length > 0 ? (totalLosses / losingTrades.length).toFixed(2) : '0.00';
 
   return (
-    <div className="flex flex-col border-t border-[#1c2230] bg-[#0c0e14] text-neutral-200 transition-all">
+    <div className="flex flex-col border-t border-[#252c36] bg-[#11151b] text-neutral-200 transition-all">
       {/* Top Header & Tabs Bar */}
-      <div className="flex items-center justify-between border-b border-[#1c2230] px-4 py-2 bg-[#090b10]">
-        <div className="flex items-center space-x-1 sm:space-x-2">
+      <div className="flex items-center justify-between gap-3 border-b border-[#252c36] bg-[#14181e] px-5 py-3">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
           {/* Tab 1: Trades */}
           <button
             onClick={() => {
               setActiveTab('trades');
               setIsCollapsed(false);
             }}
-            className={`flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors cursor-pointer ${
               activeTab === 'trades' && !isCollapsed
-                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/40'
-                : 'text-neutral-400 hover:text-white hover:bg-[#141824]'
+                ? 'bg-[#30291d] text-[#e3bd76]'
+                : 'text-neutral-400 hover:bg-[#202630] hover:text-white'
             }`}
           >
             <History className="h-3.5 w-3.5" />
             <span>Trade Ledger</span>
-            <span className="rounded bg-[#1a2130] px-1.5 py-0.2 text-[10px] font-mono text-neutral-300">
+            <span className="rounded bg-[#202630] px-1.5 py-0.5 font-mono text-xs text-neutral-300">
               {totalTrades}
             </span>
           </button>
@@ -68,10 +68,10 @@ export const TradeHistory: React.FC = () => {
               setActiveTab('stats');
               setIsCollapsed(false);
             }}
-            className={`flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors cursor-pointer ${
               activeTab === 'stats' && !isCollapsed
-                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/40'
-                : 'text-neutral-400 hover:text-white hover:bg-[#141824]'
+                ? 'bg-[#30291d] text-[#e3bd76]'
+                : 'text-neutral-400 hover:bg-[#202630] hover:text-white'
             }`}
           >
             <BarChart2 className="h-3.5 w-3.5" />
@@ -84,10 +84,10 @@ export const TradeHistory: React.FC = () => {
               setActiveTab('rules');
               setIsCollapsed(false);
             }}
-            className={`flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors cursor-pointer ${
               activeTab === 'rules' && !isCollapsed
-                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/40'
-                : 'text-neutral-400 hover:text-white hover:bg-[#141824]'
+                ? 'bg-[#30291d] text-[#e3bd76]'
+                : 'text-neutral-400 hover:bg-[#202630] hover:text-white'
             }`}
           >
             <Keyboard className="h-3.5 w-3.5" />
@@ -97,7 +97,7 @@ export const TradeHistory: React.FC = () => {
 
         {/* Quick summary metrics & Collapse Toggle */}
         <div className="flex items-center space-x-4">
-          <div className="hidden md:flex items-center space-x-4 text-xs font-mono tabular-nums">
+          <div className="hidden md:flex items-center gap-4 text-sm font-mono tabular-nums">
             <span className="text-neutral-400">
               Win Rate: <strong className="text-white">{winRate}%</strong>
             </span>
@@ -112,7 +112,7 @@ export const TradeHistory: React.FC = () => {
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
             title={isCollapsed ? 'Expand panel' : 'Collapse panel'}
-            className="p-1 text-neutral-400 hover:text-white hover:bg-[#182030] rounded cursor-pointer"
+            className="flex h-9 w-9 items-center justify-center rounded-md text-neutral-400 transition-colors hover:bg-[#202630] hover:text-white cursor-pointer"
           >
             {isCollapsed ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
@@ -121,34 +121,34 @@ export const TradeHistory: React.FC = () => {
 
       {/* Collapsible Content Body */}
       {!isCollapsed && (
-        <div className="max-h-52 min-h-24 overflow-y-auto">
+        <div className="max-h-64 min-h-28 overflow-auto">
           {activeTab === 'trades' && (
             <div>
               {totalTrades === 0 ? (
-                <div className="py-8 text-center text-xs text-neutral-500 italic">
+                <div className="px-4 py-10 text-center text-sm text-neutral-500">
                   No trades recorded yet in this session. Open a position to simulate execution.
                 </div>
               ) : (
-                <table className="w-full text-left text-xs font-mono tabular-nums">
-                  <thead className="sticky top-0 bg-[#0e121c] text-[10px] text-neutral-400 uppercase tracking-wider border-b border-[#1c2230]">
+                <table className="w-full min-w-[900px] text-left text-xs font-mono tabular-nums">
+                  <thead className="sticky top-0 border-b border-[#303844] bg-[#14181e] text-xs uppercase tracking-wide text-neutral-400">
                     <tr>
-                      <th className="px-4 py-2 font-semibold">Side</th>
-                      <th className="px-3 py-2 font-semibold">Qty</th>
-                      <th className="px-3 py-2 font-semibold">Entry Time (UTC)</th>
-                      <th className="px-3 py-2 font-semibold">Entry Px</th>
-                      <th className="px-3 py-2 font-semibold">Exit Time (UTC)</th>
-                      <th className="px-3 py-2 font-semibold">Exit Px</th>
-                      <th className="px-3 py-2 font-semibold">Exit Reason</th>
-                      <th className="px-3 py-2 font-semibold text-right">Gross P&L</th>
-                      <th className="px-4 py-2 font-semibold text-right">Net P&L</th>
+                      <th className="px-4 py-3 font-semibold">Side</th>
+                      <th className="px-3 py-3 font-semibold">Qty</th>
+                      <th className="px-3 py-3 font-semibold">Entry Time (UTC)</th>
+                      <th className="px-3 py-3 font-semibold">Entry Price</th>
+                      <th className="px-3 py-3 font-semibold">Exit Time (UTC)</th>
+                      <th className="px-3 py-3 font-semibold">Exit Price</th>
+                      <th className="px-3 py-3 font-semibold">Exit Reason</th>
+                      <th className="px-3 py-3 text-right font-semibold">Gross P&L</th>
+                      <th className="px-4 py-3 text-right font-semibold">Net P&L</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#161c28]">
                     {tradeHistory.slice().reverse().map((trade) => {
                       const isProfit = trade.netPnl >= 0;
                       return (
-                        <tr key={trade.id} className="hover:bg-[#131724]/70 transition-colors">
-                          <td className="px-4 py-2">
+                        <tr key={trade.id} className="transition-colors hover:bg-[#171c23]">
+                          <td className="px-4 py-3">
                             <span className={`inline-flex items-center gap-1 font-bold text-xs ${
                               trade.side === 'LONG' ? 'text-emerald-400' : 'text-rose-400'
                             }`}>
@@ -160,12 +160,12 @@ export const TradeHistory: React.FC = () => {
                               {trade.side}
                             </span>
                           </td>
-                          <td className="px-3 py-2 text-neutral-300">{trade.quantity} oz</td>
-                          <td className="px-3 py-2 text-neutral-400">{formatUtcTime(trade.entryTime)}</td>
-                          <td className="px-3 py-2 text-white font-semibold">${trade.entryPrice.toFixed(2)}</td>
-                          <td className="px-3 py-2 text-neutral-400">{formatUtcTime(trade.exitTime)}</td>
-                          <td className="px-3 py-2 text-white font-semibold">${trade.exitPrice.toFixed(2)}</td>
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-3 text-neutral-300">{trade.quantity} oz</td>
+                          <td className="px-3 py-3 text-neutral-400">{formatUtcTime(trade.entryTime)}</td>
+                          <td className="px-3 py-3 font-semibold text-white">${trade.entryPrice.toFixed(2)}</td>
+                          <td className="px-3 py-3 text-neutral-400">{formatUtcTime(trade.exitTime)}</td>
+                          <td className="px-3 py-3 font-semibold text-white">${trade.exitPrice.toFixed(2)}</td>
+                          <td className="px-3 py-3">
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${
                               trade.exitReason === 'TP'
                                 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
@@ -179,10 +179,10 @@ export const TradeHistory: React.FC = () => {
                               <span>{trade.exitReason === 'TP' ? 'Take Profit' : trade.exitReason === 'SL' ? 'Stop Loss' : 'Manual'}</span>
                             </span>
                           </td>
-                          <td className={`px-3 py-2 text-right font-medium ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          <td className={`px-3 py-3 text-right font-medium ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
                             {trade.grossPnl >= 0 ? '+' : ''}${trade.grossPnl.toFixed(2)}
                           </td>
-                          <td className={`px-4 py-2 text-right font-bold text-xs ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          <td className={`px-4 py-3 text-right font-semibold ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
                             {trade.netPnl >= 0 ? '+' : ''}${trade.netPnl.toFixed(2)}
                           </td>
                         </tr>
