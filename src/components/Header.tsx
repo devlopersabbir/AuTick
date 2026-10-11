@@ -2,14 +2,14 @@
 
 import React from 'react';
 import { useTradingSimulatorStore } from '@/stores/useTradingSimulatorStore';
-import { Calendar, Clock, Database, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react';
+import { Calendar, Clock, Database, TrendingUp, TrendingDown, Link2 } from 'lucide-react';
 import { getSessionInfo } from '@/lib/utils/sessions';
 
 interface HeaderProps {
-  onOpenDataSelector: () => void;
+  onOpenBrokerModal: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onOpenDataSelector }) => {
+export const Header: React.FC<HeaderProps> = ({ onOpenBrokerModal }) => {
   const metadata = useTradingSimulatorStore((s) => s.metadata);
   const currentCandle = useTradingSimulatorStore((s) => s.currentCandle);
   const currentIndex = useTradingSimulatorStore((s) => s.currentIndex);
@@ -166,13 +166,15 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDataSelector }) => {
           </div>
         )}
 
-        {/* Change Date Range Button */}
+        {/* Connect Broker Button */}
         <button
-          onClick={onOpenDataSelector}
-          className="flex items-center space-x-1.5 rounded-lg border border-amber-500/40 bg-gradient-to-r from-amber-500/10 to-amber-600/10 hover:from-amber-500/20 hover:to-amber-600/20 px-3 py-1.5 text-xs font-semibold text-amber-400 transition-all shadow-sm hover:border-amber-500"
+          type="button"
+          onClick={onOpenBrokerModal}
+          title="Connect a broker account"
+          className="flex items-center space-x-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 px-3 py-1.5 text-xs font-semibold text-amber-300 transition-colors shadow-sm hover:border-amber-500"
         >
-          <RefreshCw className="h-3.5 w-3.5" />
-          <span>Historical Range</span>
+          <Link2 className="h-3.5 w-3.5" />
+          <span>Connect Broker</span>
         </button>
       </div>
     </header>

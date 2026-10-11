@@ -11,7 +11,7 @@ Built with **Next.js (App Router)**, **TypeScript**, **TradingView Lightweight C
 - **Historical XAUUSD Market Data**:
   - Live server-side proxy route (`/api/market-data`) fetching real 1-minute historical candlestick data.
   - Pluggable provider adapter architecture supporting:
-    - **Bybit Linear Perpetual API** (`symbol=XAUUSDT`, public 1-minute historical candles, no API key required).
+    - **Bybit TradFi market** (`symbol=XAUUSD.s`, preferred for actual gold pricing; falls back to legacy `XAUUSDT` if the TradFi feed is unavailable).
     - **Twelve Data API** (`symbol=XAU/USD`, spot historical candles via optional `TWELVE_DATA_API_KEY`).
   - Validation, chronological sorting, and deduplication of historical candles.
   - Strict preservation of price integrity (never fabricates prices or substitutes random data).

@@ -14,9 +14,51 @@ interface BybitKlineResponse {
 
 export class BybitMarketDataProvider implements MarketDataProvider {
   readonly id = 'bybit';
-  readonly name = 'Bybit (Linear Perpetual)';
+  readonly name = 'Bybit TradFi (XAUUSD.s)';
 
   private baseUrl = 'https://api.bybit.com/v5/market/kline';
+
+  private async fetchKlineWithFallback(searchParams: URLSearchParams): Promise<BybitKlineResponse> {
+    const symbols = ['XAUUSD.s', 'XAUUSDT'];
+    let lastError = 'Bybit returned an unsupported response.';
+
+    for (const symbol of symbols) {
+      const url = new URL(this.baseUrl);
+      url.searchParams.set('category', 'linear');
+      url.searchParams.set('symbol', symbol);
+      for (const [key, value] of searchParams.entries()) {
+        url.searchParams.set(key, value);
+      }
+
+      const response = await fetch(url.toString(), {
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'AuTick-MarketReplay/1.0',
+        },
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        throw new Error(`Bybit API HTTP error ${response.status}: ${response.statusText}`);
+      }
+
+      const json: BybitKlineResponse = await response.json();
+      const retMsg = json.retMsg?.toLowerCase() ?? '';
+
+      if (json.retCode === 0) {
+        return json;
+      }
+
+      if (symbol === 'XAUUSD.s' && (json.retCode === 10001 || retMsg.includes('symbol') || retMsg.includes('invalid'))) {
+        lastError = json.retMsg || lastError;
+        continue;
+      }
+
+      throw new Error(`Bybit API returned error code ${json.retCode}: ${json.retMsg}`);
+    }
+
+    throw new Error(`Bybit TradFi XAUUSD.s feed is unavailable and the fallback XAUUSDT feed is also invalid. Last error: ${lastError}`);
+  }
 
   async fetchCandles(params: FetchCandlesParams): Promise<{
     candles: Candle[];
@@ -53,31 +95,14 @@ export class BybitMarketDataProvider implements MarketDataProvider {
 
     while (currentEndMs > startMs && page < maxPages) {
       page++;
-      const url = new URL(this.baseUrl);
-      url.searchParams.set('category', 'linear');
-      url.searchParams.set('symbol', 'XAUUSDT');
-      url.searchParams.set('interval', bybitInterval);
-      url.searchParams.set('start', startMs.toString());
-      url.searchParams.set('end', currentEndMs.toString());
-      url.searchParams.set('limit', '1000');
-
-      const response = await fetch(url.toString(), {
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'AuTick-MarketReplay/1.0',
-        },
-        cache: 'no-store',
+      const query = new URLSearchParams({
+        interval: bybitInterval,
+        start: startMs.toString(),
+        end: currentEndMs.toString(),
+        limit: '1000',
       });
 
-      if (!response.ok) {
-        throw new Error(`Bybit API HTTP error ${response.status}: ${response.statusText}`);
-      }
-
-      const json: BybitKlineResponse = await response.json();
-
-      if (json.retCode !== 0) {
-        throw new Error(`Bybit API returned error code ${json.retCode}: ${json.retMsg}`);
-      }
+      const json = await this.fetchKlineWithFallback(query);
 
       const list = json.result?.list;
       if (!list || list.length === 0) {
@@ -151,25 +176,12 @@ export class BybitMarketDataProvider implements MarketDataProvider {
     const requestedTf = timeframe.toLowerCase();
     const bybitInterval = timeframeMap[requestedTf] || '1';
 
-    const url = new URL(this.baseUrl);
-    url.searchParams.set('category', 'linear');
-    url.searchParams.set('symbol', 'XAUUSDT');
-    url.searchParams.set('interval', bybitInterval);
-    url.searchParams.set('limit', Math.min(limit, 50).toString());
-
-    const response = await fetch(url.toString(), {
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': 'AuTick-MarketReplay/1.0',
-      },
-      cache: 'no-store',
+    const query = new URLSearchParams({
+      interval: bybitInterval,
+      limit: Math.min(limit, 50).toString(),
     });
 
-    if (!response.ok) {
-      throw new Error(`Bybit API HTTP error ${response.status}: ${response.statusText}`);
-    }
-
-    const json: BybitKlineResponse = await response.json();
+    const json = await this.fetchKlineWithFallback(query);
     if (json.retCode !== 0 || !json.result?.list) {
       return [];
     }
@@ -209,26 +221,13 @@ export class BybitMarketDataProvider implements MarketDataProvider {
     // End 1 second prior to target timestamp
     const endMs = (endTimestamp - 1) * 1000;
 
-    const url = new URL(this.baseUrl);
-    url.searchParams.set('category', 'linear');
-    url.searchParams.set('symbol', 'XAUUSDT');
-    url.searchParams.set('interval', bybitInterval);
-    url.searchParams.set('end', endMs.toString());
-    url.searchParams.set('limit', Math.min(limit, 1000).toString());
-
-    const response = await fetch(url.toString(), {
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': 'AuTick-MarketReplay/1.0',
-      },
-      cache: 'no-store',
+    const query = new URLSearchParams({
+      interval: bybitInterval,
+      end: endMs.toString(),
+      limit: Math.min(limit, 1000).toString(),
     });
 
-    if (!response.ok) {
-      throw new Error(`Bybit API HTTP error ${response.status}: ${response.statusText}`);
-    }
-
-    const json: BybitKlineResponse = await response.json();
+    const json = await this.fetchKlineWithFallback(query);
     if (json.retCode !== 0 || !json.result?.list) {
       return [];
     }

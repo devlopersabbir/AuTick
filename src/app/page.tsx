@@ -8,10 +8,12 @@ import { Chart } from '@/components/Chart';
 import { TradePanel } from '@/components/TradePanel';
 import { TradeHistory } from '@/components/TradeHistory';
 import { DataSelectorModal } from '@/components/DataSelectorModal';
+import { BrokerSelectorModal } from '@/components/BrokerSelectorModal';
 import { useTradingSimulatorStore } from '@/stores/useTradingSimulatorStore';
 
 export default function Home() {
   const [isDataSelectorOpen, setIsDataSelectorOpen] = useState(false);
+  const [isBrokerModalOpen, setIsBrokerModalOpen] = useState(false);
   const fetchMarketData = useTradingSimulatorStore((s) => s.fetchMarketData);
   const candles = useTradingSimulatorStore((s) => s.candles);
   const replayStatus = useTradingSimulatorStore((s) => s.replayStatus);
@@ -81,7 +83,7 @@ export default function Home() {
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#08090c] font-sans text-neutral-100 select-none">
       {/* Top Header Command Bar */}
-      <Header onOpenDataSelector={() => setIsDataSelectorOpen(true)} />
+      <Header onOpenBrokerModal={() => setIsBrokerModalOpen(true)} />
 
       {/* Replay Control Bar */}
       <ReplayToolbar />
@@ -113,6 +115,15 @@ export default function Home() {
       <DataSelectorModal
         isOpen={isDataSelectorOpen}
         onClose={() => setIsDataSelectorOpen(false)}
+      />
+
+      <BrokerSelectorModal
+        isOpen={isBrokerModalOpen}
+        onClose={() => setIsBrokerModalOpen(false)}
+        onOpenHistoricalRange={() => {
+          setIsBrokerModalOpen(false);
+          setIsDataSelectorOpen(true);
+        }}
       />
     </div>
   );

@@ -125,7 +125,7 @@ export const DataSelectorModal: React.FC<DataSelectorModalProps> = ({ isOpen, on
                   </span>
                 </div>
                 <div className="text-[11px] text-neutral-400 leading-tight">
-                  High-speed 1m XAUUSDT historical linear perpetuals. No API key needed.
+                  Prefer Bybit TradFi XAUUSD.s gold pricing; falls back to the legacy XAUUSDT feed if needed.
                 </div>
               </button>
 
