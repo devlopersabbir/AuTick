@@ -7,6 +7,13 @@ const providers: Record<string, MarketDataProvider> = {
   twelvedata: new TwelveDataMarketDataProvider(),
 };
 
+export function shouldFallbackToAlternateProvider(error: unknown, providerId?: string, hasAlternateKey: boolean = !!process.env.TWELVE_DATA_API_KEY): boolean {
+  const requestedProvider = (providerId || process.env.DEFAULT_DATA_PROVIDER || 'bybit').toLowerCase();
+  const message = error instanceof Error ? error.message : String(error ?? '');
+
+  return requestedProvider === 'bybit' && hasAlternateKey && /Bybit API HTTP error 403|Bybit API returned error code.*403|Forbidden/i.test(message);
+}
+
 export function getMarketDataProvider(providerId?: string): MarketDataProvider {
   const defaultId = process.env.DEFAULT_DATA_PROVIDER || 'bybit';
   const id = providerId || defaultId;

@@ -1,8 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMarketDataProvider, getAvailableProviders } from '@/lib/market-data/providers';
+import {
+  getMarketDataProvider,
+  getAvailableProviders,
+  shouldFallbackToAlternateProvider,
+} from '@/lib/market-data/providers';
 import { MarketDataApiResponse } from '@/lib/market-data/types';
 import { Candle } from '@/types';
 
+async function fetchWithFallback<T>(
+  providerParam: string | undefined,
+  fetcher: () => Promise<T>,
+  fallbackFetcher?: () => Promise<T>
+): Promise<T> {
+  try {
+    return await fetcher();
+  } catch (error) {
+    const fallbackCandidate = shouldFallbackToAlternateProvider(error, providerParam, !!process.env.TWELVE_DATA_API_KEY);
+    if (fallbackCandidate && fallbackFetcher) {
+      return await fallbackFetcher();
+    }
+    throw error;
+  }
+}
 
 export async function GET(request: NextRequest): Promise<NextResponse<MarketDataApiResponse>> {
   try {
@@ -32,17 +51,44 @@ export async function GET(request: NextRequest): Promise<NextResponse<MarketData
     if (searchParams.get('live') === 'true') {
       const provider = getMarketDataProvider(providerParam);
       let candles: Candle[] = [];
-      if (provider.fetchLatestCandles) {
-        candles = await provider.fetchLatestCandles(timeframeParam, 5);
+      const fallbackProvider = shouldFallbackToAlternateProvider(new Error('Bybit API HTTP error 403: Forbidden'), providerParam, !!process.env.TWELVE_DATA_API_KEY)
+        ? getMarketDataProvider('twelvedata')
+        : undefined;
+
+      const fetchLatestCandles = provider.fetchLatestCandles;
+      if (fetchLatestCandles) {
+        const fallbackLatestMethod = fallbackProvider?.fetchLatestCandles;
+        const fallbackLatestFetcher = fallbackLatestMethod
+          ? () => fallbackLatestMethod(timeframeParam, 5)
+          : undefined;
+
+        candles = await fetchWithFallback(
+          providerParam,
+          () => fetchLatestCandles(timeframeParam, 5),
+          fallbackLatestFetcher
+        );
       } else {
         const nowSec = Math.floor(Date.now() / 1000);
-        const result = await provider.fetchCandles({
-          symbol: 'XAUUSD',
-          startTime: nowSec - 300,
-          endTime: nowSec,
-          timeframe: timeframeParam,
-        });
-        candles = result.candles;
+        const fetchCandles = provider.fetchCandles;
+        const fallbackCandlesFetcher = fallbackProvider
+          ? () => fallbackProvider.fetchCandles({
+              symbol: 'XAUUSD',
+              startTime: nowSec - 300,
+              endTime: nowSec,
+              timeframe: timeframeParam,
+            }).then((result) => result.candles)
+          : undefined;
+
+        candles = await fetchWithFallback(
+          providerParam,
+          () => fetchCandles({
+            symbol: 'XAUUSD',
+            startTime: nowSec - 300,
+            endTime: nowSec,
+            timeframe: timeframeParam,
+          }).then((result) => result.candles),
+          fallbackCandlesFetcher
+        );
       }
 
       return NextResponse.json({
@@ -64,8 +110,22 @@ export async function GET(request: NextRequest): Promise<NextResponse<MarketData
       const limit = parseInt(searchParams.get('limit') || '1000', 10);
       const provider = getMarketDataProvider(providerParam);
       let candles: Candle[] = [];
-      if (provider.fetchOlderCandles) {
-        candles = await provider.fetchOlderCandles(endTimestamp, timeframeParam, limit);
+      const fallbackProvider = shouldFallbackToAlternateProvider(new Error('Bybit API HTTP error 403: Forbidden'), providerParam, !!process.env.TWELVE_DATA_API_KEY)
+        ? getMarketDataProvider('twelvedata')
+        : undefined;
+
+      const fetchOlderCandles = provider.fetchOlderCandles;
+      if (fetchOlderCandles) {
+        const fallbackOlderMethod = fallbackProvider?.fetchOlderCandles;
+        const fallbackOlderFetcher = fallbackOlderMethod
+          ? () => fallbackOlderMethod(endTimestamp, timeframeParam, limit)
+          : undefined;
+
+        candles = await fetchWithFallback(
+          providerParam,
+          () => fetchOlderCandles(endTimestamp, timeframeParam, limit),
+          fallbackOlderFetcher
+        );
       }
       return NextResponse.json({
         success: true,
@@ -107,12 +167,28 @@ export async function GET(request: NextRequest): Promise<NextResponse<MarketData
     }
 
     const provider = getMarketDataProvider(providerParam);
-    const result = await provider.fetchCandles({
-      symbol: 'XAUUSD',
-      startTime,
-      endTime,
-      timeframe: timeframeParam,
-    });
+    const fallbackProvider = shouldFallbackToAlternateProvider(new Error('Bybit API HTTP error 403: Forbidden'), providerParam, !!process.env.TWELVE_DATA_API_KEY)
+      ? getMarketDataProvider('twelvedata')
+      : undefined;
+    const fallbackCandlesFetcher = fallbackProvider
+      ? () => fallbackProvider.fetchCandles({
+          symbol: 'XAUUSD',
+          startTime,
+          endTime,
+          timeframe: timeframeParam,
+        })
+      : undefined;
+
+    const result = await fetchWithFallback(
+      providerParam,
+      () => provider.fetchCandles({
+        symbol: 'XAUUSD',
+        startTime,
+        endTime,
+        timeframe: timeframeParam,
+      }),
+      fallbackCandlesFetcher
+    );
 
     return NextResponse.json({
       success: true,

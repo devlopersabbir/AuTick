@@ -2,6 +2,7 @@ import { describe, it, expect } from 'bun:test';
 import { isValidCandle, validateAndSortCandles } from '@/lib/market-data/validation';
 import { BybitMarketDataProvider } from '@/lib/market-data/providers/bybit';
 import { TwelveDataMarketDataProvider } from '@/lib/market-data/providers/twelvedata';
+import { shouldFallbackToAlternateProvider } from '@/lib/market-data/providers';
 
 describe('Market Data Validation and Normalization', () => {
   it('validates a normal candle correctly', () => {
@@ -152,5 +153,11 @@ describe('Market Data Validation and Normalization', () => {
         timeframe: '5m',
       })
     ).rejects.toThrow('Invalid date range');
+  });
+
+  it('flags Bybit 403s for alternate provider fallback when Twelve Data is configured', () => {
+    expect(shouldFallbackToAlternateProvider(new Error('Bybit API HTTP error 403: Forbidden'), 'bybit', true)).toBe(true);
+    expect(shouldFallbackToAlternateProvider(new Error('Bybit API HTTP error 500: Internal Server Error'), 'bybit', true)).toBe(false);
+    expect(shouldFallbackToAlternateProvider(new Error('Bybit API HTTP error 403: Forbidden'), 'twelvedata', true)).toBe(false);
   });
 });
