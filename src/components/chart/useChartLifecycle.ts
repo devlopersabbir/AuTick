@@ -8,7 +8,7 @@ import type { Candle } from '@/types';
 import type { TradingSimulatorState } from '@/stores/tradingSimulatorStoreTypes';
 import { useTradingSimulatorStore } from '@/stores/useTradingSimulatorStore';
 import { formatCrosshairTimeWithSession, formatTickMarkAmPm } from '@/lib/utils/sessions';
-import { findClosedCandleBreakouts } from '@/lib/market-data/breakout-indicator';
+import { calculateBreakoutSignals, type BreakoutIndicatorConfig } from '@/lib/market-data/breakout-indicator';
 import { TIMEFRAME_SECONDS } from './chartConstants';
 
 type ChartTheme = {
@@ -32,13 +32,14 @@ interface ChartLifecycleOptions {
   candleCountdown: string | null;
   isMarketOpen: boolean;
   breakoutEnabled: boolean;
+  breakoutConfig: BreakoutIndicatorConfig;
   currentTimeframe: string;
 }
 
 export function useChartLifecycle({
   containerRef, chartRef, seriesRef, chartTheme, setHoveredCandle, setViewportKey,
   candles, currentIndex, isLiveMode, currentCandle, openPosition, tradeHistory,
-  candleCountdown, isMarketOpen, breakoutEnabled, currentTimeframe,
+  candleCountdown, isMarketOpen, breakoutEnabled, breakoutConfig, currentTimeframe,
 }: ChartLifecycleOptions) {
   const initialChartThemeRef = useRef(chartTheme);
   const markersPluginRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
@@ -436,22 +437,23 @@ export function useChartLifecycle({
       });
     }
 
-    if (isLiveMode && breakoutEnabled) {
+    if (breakoutEnabled) {
       const timeframeSeconds = TIMEFRAME_SECONDS[currentTimeframe.toLowerCase()] ?? 60;
-      const breakouts = findClosedCandleBreakouts(
+      const breakouts = calculateBreakoutSignals(
         candles,
         currentIndex,
         timeframeSeconds,
         Math.floor(Date.now() / 1000),
+        breakoutConfig,
       );
 
       for (const breakout of breakouts) {
         markers.push({
           time: breakout.time as UTCTimestamp,
           position: breakout.direction === 'up' ? 'belowBar' : 'aboveBar',
-          color: breakout.direction === 'up' ? '#22c55e' : '#f97316',
+          color: breakout.direction === 'up' ? '#22c55e' : '#ef4444',
           shape: breakout.direction === 'up' ? 'arrowUp' : 'arrowDown',
-          text: breakout.direction === 'up' ? 'BO' : 'BD',
+          size: 2,
         });
       }
     }
@@ -467,6 +469,7 @@ export function useChartLifecycle({
     currentIndex,
     isLiveMode,
     breakoutEnabled,
+    breakoutConfig,
     currentTimeframe,
   ]);
 
