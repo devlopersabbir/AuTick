@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import { useTradingSimulatorStore } from '@/stores/useTradingSimulatorStore';
 import { Clock, TrendingUp, TrendingDown, Link2 } from 'lucide-react';
 import { getSessionInfo } from '@/lib/utils/sessions';
+import { useTradingViewGoldQuote } from '@/components/chart/useTradingViewGoldQuote';
 
 interface HeaderProps {
   onOpenBrokerModal: () => void;
@@ -19,8 +20,21 @@ export const Header: React.FC<HeaderProps> = ({ onOpenBrokerModal }) => {
   const changeTimeframe = useTradingSimulatorStore((s) => s.changeTimeframe);
   const isLoadingData = useTradingSimulatorStore((s) => s.isLoadingData);
   const isLiveMode = useTradingSimulatorStore((s) => s.isLiveMode);
+  const { quote, status: quoteStatus } = useTradingViewGoldQuote();
 
   useEffect(() => {
+    if (isLiveMode && quote) {
+      const price = quote.price.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+      document.title = `$${price} | OANDA:XAUUSD | AuTick`;
+      return;
+    }
+    if (isLiveMode) {
+      document.title = 'AuTick | Connecting OANDA:XAUUSD';
+      return;
+    }
     if (!currentCandle) {
       document.title = 'AuTick | XAUUSD Replay';
       return;
@@ -31,14 +45,25 @@ export const Header: React.FC<HeaderProps> = ({ onOpenBrokerModal }) => {
       maximumFractionDigits: 2,
     });
     document.title = `$${price} | XAUUSD | AuTick`;
-  }, [currentCandle]);
+  }, [currentCandle, isLiveMode, quote]);
 
   // Price calculations
   const firstCandle = candles[0];
   const currentPrice = currentCandle ? currentCandle.close : 0;
   const initialPrice = firstCandle ? firstCandle.open : currentPrice;
-  const sessionChange = currentPrice - initialPrice;
-  const sessionChangePercent = initialPrice > 0 ? (sessionChange / initialPrice) * 100 : 0;
+  const useLiveQuote = isLiveMode && quote !== null;
+  const displayPrice = isLiveMode ? quote?.price ?? null : currentCandle?.close ?? null;
+  const sessionChange = useLiveQuote ? quote.change ?? 0 : currentPrice - initialPrice;
+  const sessionChangePercent = useLiveQuote
+    ? quote.changePercent ?? (
+        quote.change !== null && quote.price - quote.change > 0
+          ? quote.change / (quote.price - quote.change) * 100
+          : 0
+      )
+    : initialPrice > 0 ? (sessionChange / initialPrice) * 100 : 0;
+  const hasPriceChange = useLiveQuote
+    ? quote.change !== null || quote.changePercent !== null
+    : currentCandle !== null;
   const isUp = sessionChange >= 0;
 
   const progressPercent = totalCandles > 0 && currentIndex >= 0
@@ -75,7 +100,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenBrokerModal }) => {
         {/* Ticker, Timeframe Switcher & Live Price */}
         <div className="flex flex-wrap items-center gap-3">
           <span className="rounded border border-[#343e4b] bg-[#171c23] px-2.5 py-1 text-sm font-semibold text-[#e3bd76]">
-            XAUUSD
+            {isLiveMode ? 'OANDA:XAUUSD' : 'XAUUSD'}
           </span>
 
           {/* Timeframe selector bar */}
@@ -97,20 +122,33 @@ export const Header: React.FC<HeaderProps> = ({ onOpenBrokerModal }) => {
             ))}
           </div>
 
-          {currentCandle ? (
+          {displayPrice !== null ? (
             <div className="flex flex-wrap items-center gap-2 font-mono tabular-nums">
               <span className="text-lg font-semibold tracking-tight text-white">
-                ${currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ${displayPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
-              <span className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold ${
-                isUp
-                  ? 'bg-emerald-500/10 text-emerald-300'
-                  : 'bg-rose-500/10 text-rose-300'
-              }`}>
-                {isUp ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                <span>{isUp ? '+' : ''}{sessionChange.toFixed(2)} ({isUp ? '+' : ''}{sessionChangePercent.toFixed(2)}%)</span>
-              </span>
+              {useLiveQuote && (
+                <span className={`text-[10px] font-semibold uppercase tracking-wide ${
+                  quoteStatus === 'live' ? 'text-emerald-400' : 'text-amber-400'
+                }`}>
+                  {quoteStatus === 'live' ? 'Live' : quoteStatus === 'snapshot' ? 'Snapshot' : 'Reconnecting'}
+                </span>
+              )}
+              {hasPriceChange && (
+                <span className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold ${
+                  isUp
+                    ? 'bg-emerald-500/10 text-emerald-300'
+                    : 'bg-rose-500/10 text-rose-300'
+                }`}>
+                  {isUp ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                  <span>{isUp ? '+' : ''}{sessionChange.toFixed(2)} ({isUp ? '+' : ''}{sessionChangePercent.toFixed(2)}%)</span>
+                </span>
+              )}
             </div>
+          ) : isLiveMode ? (
+            <span className="text-sm text-neutral-500" role="status">
+              {quoteStatus === 'reconnecting' ? 'Reconnecting to TradingView…' : 'Connecting to TradingView…'}
+            </span>
           ) : (
             <span className="text-sm text-neutral-500">Waiting for market data</span>
           )}
