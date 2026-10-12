@@ -10,6 +10,7 @@ import {
   ISeriesApi,
   IPriceLine,
   ISeriesMarkersPluginApi,
+  Logical,
   UTCTimestamp,
   Time,
   SeriesMarker,
@@ -89,6 +90,12 @@ interface ProjectedDrawing {
     tr: { x: number; y: number };
     br: { x: number; y: number };
     bl: { x: number; y: number };
+  };
+  edgeHandles?: {
+    top: { x: number; y: number };
+    bottom: { x: number; y: number };
+    left: { x: number; y: number };
+    right: { x: number; y: number };
   };
 
   // For circle
@@ -191,6 +198,13 @@ export const Chart: React.FC = () => {
 
   // Dragging and resizing state
   const [dragState, setDragState] = useState<DragState | null>(null);
+  const rectangleCreationRef = useRef<{
+    start: DataPoint;
+    clientX: number;
+    clientY: number;
+    isFirstPoint: boolean;
+  } | null>(null);
+  const suppressOverlayClickRef = useRef(false);
 
   // Projected SVG coordinates (computed in effect, not in render)
   const [projectedDrawings, setProjectedDrawings] = useState<ProjectedDrawing[]>([]);
@@ -217,6 +231,10 @@ export const Chart: React.FC = () => {
     borderDownColor: '#f23645',
   });
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    void useTradingSimulatorStore.persist.rehydrate();
+  }, []);
 
   useEffect(() => {
     setClockNow(Date.now());
@@ -268,12 +286,17 @@ export const Chart: React.FC = () => {
     const x = clientX - rect.left;
     const y = clientY - rect.top;
 
-    const time = chart.timeScale().coordinateToTime(x) as number | null;
+    const timeScale = chart.timeScale();
+    const time = timeScale.coordinateToTime(x) as number | null;
+    const logical = time === null ? timeScale.coordinateToLogical(x) : null;
     const price = series.coordinateToPrice(y) as number | null;
+    const timeframeSeconds = TIMEFRAME_SECONDS[currentTimeframe.toLowerCase()];
 
     const resolvedTime = time !== null
       ? time
-      : (currentCandle ? currentCandle.timestamp : Math.floor(Date.now() / 1000));
+      : logical !== null && currentCandle && timeframeSeconds
+        ? currentCandle.timestamp + Math.round(logical - currentIndex) * timeframeSeconds
+        : (currentCandle ? currentCandle.timestamp : Math.floor(Date.now() / 1000));
 
     const resolvedPrice = price !== null
       ? price
@@ -285,7 +308,7 @@ export const Chart: React.FC = () => {
       time: resolvedTime,
       price: resolvedPrice,
     };
-  }, [currentCandle]);
+  }, [currentCandle, currentIndex, currentTimeframe]);
 
   // Initialize chart
   useEffect(() => {
@@ -617,8 +640,14 @@ export const Chart: React.FC = () => {
     if (!chart || !series) return;
 
     const timeScale = chart.timeScale();
+    const timeframeSeconds = TIMEFRAME_SECONDS[currentTimeframe.toLowerCase()] ?? 60;
     const toCoords = (pt: DataPoint) => {
-      const x = timeScale.timeToCoordinate(pt.time as UTCTimestamp);
+      let x = timeScale.timeToCoordinate(pt.time as UTCTimestamp);
+      if (x === null && currentCandle) {
+        const logical = currentIndex +
+          (pt.time - currentCandle.timestamp) / timeframeSeconds;
+        x = timeScale.logicalToCoordinate(logical as Logical);
+      }
       const y = series.priceToCoordinate(pt.price);
       if (x === null || y === null) return null;
       return { x, y };
@@ -682,6 +711,12 @@ export const Chart: React.FC = () => {
               tr: { x: maxX, y: minY },
               br: { x: maxX, y: maxY },
               bl: { x: minX, y: maxY },
+            },
+            edgeHandles: {
+              top: { x: (minX + maxX) / 2, y: minY },
+              bottom: { x: (minX + maxX) / 2, y: maxY },
+              left: { x: minX, y: (minY + maxY) / 2 },
+              right: { x: maxX, y: (minY + maxY) / 2 },
             },
           });
         }
@@ -858,7 +893,7 @@ export const Chart: React.FC = () => {
     } else {
       setProjectedPreview(null);
     }
-  }, [viewportKey, drawings, drawingStartPoint, drawingStartTool, currentMousePoint, activeTool, candles, currentIndex, orderPreview, currentCandle]);
+  }, [viewportKey, drawings, drawingStartPoint, drawingStartTool, currentMousePoint, activeTool, candles, currentIndex, orderPreview, currentCandle, currentTimeframe]);
 
   // Update Price Lines for Open Position (Entry, SL, TP)
   useEffect(() => {
@@ -1015,6 +1050,29 @@ export const Chart: React.FC = () => {
   const handleCloseContextMenu = () => setContextMenu(null);
 
   // Mouse interaction handler on SVG overlay
+  const handleOverlayMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (activeTool !== 'rectangle' || e.button !== 0) return;
+    const point = getChartDataPoint(e.clientX, e.clientY);
+    if (!point) return;
+
+    const isFirstPoint = !drawingStartPoint || drawingStartTool !== 'rectangle';
+    const start = isFirstPoint
+      ? { time: point.time, price: point.price }
+      : drawingStartPoint;
+
+    rectangleCreationRef.current = {
+      start,
+      clientX: e.clientX,
+      clientY: e.clientY,
+      isFirstPoint,
+    };
+    if (isFirstPoint) {
+      setDrawingStartTool('rectangle');
+      setDrawingStartPoint(start);
+    }
+    setCurrentMousePoint(point);
+  };
+
   const handleOverlayMouseMove = (e: React.MouseEvent) => {
     const pt = getChartDataPoint(e.clientX, e.clientY);
     if (!pt) return;
@@ -1064,24 +1122,23 @@ export const Chart: React.FC = () => {
 
         // Rectangle corners
         if (init.type === 'rectangle') {
-          if (handle === 'tl') {
-            updateDrawing(dragState.drawingId, {
-              p1: { time: currentPoint.time, price: currentPoint.price },
-            });
-          } else if (handle === 'br') {
-            updateDrawing(dragState.drawingId, {
-              p2: { time: currentPoint.time, price: currentPoint.price },
-            });
-          } else if (handle === 'tr') {
-            updateDrawing(dragState.drawingId, {
-              p1: { time: init.p1.time, price: currentPoint.price },
-              p2: { time: currentPoint.time, price: init.p2.price },
-            });
-          } else if (handle === 'bl') {
-            updateDrawing(dragState.drawingId, {
-              p1: { time: currentPoint.time, price: init.p1.price },
-              p2: { time: init.p2.time, price: currentPoint.price },
-            });
+          const isCorner = handle === 'tl' || handle === 'tr' || handle === 'br' || handle === 'bl';
+          const changesTime = isCorner || handle === 'left' || handle === 'right';
+          const changesPrice = isCorner || handle === 'top' || handle === 'bottom';
+          const movesLeft = handle === 'tl' || handle === 'bl' || handle === 'left';
+          const movesTop = handle === 'tl' || handle === 'tr' || handle === 'top';
+          if (changesTime || changesPrice) {
+            const p1 = { ...init.p1 };
+            const p2 = { ...init.p2 };
+            if (changesTime) {
+              const timeOwner = (init.p1.time <= init.p2.time) === movesLeft ? p1 : p2;
+              timeOwner.time = currentPoint.time;
+            }
+            if (changesPrice) {
+              const priceOwner = (init.p1.price >= init.p2.price) === movesTop ? p1 : p2;
+              priceOwner.price = currentPoint.price;
+            }
+            updateDrawing(dragState.drawingId, { p1, p2 });
           }
         } else if (init.type === 'circle') {
           if (handle === 'center') {
@@ -1112,20 +1169,61 @@ export const Chart: React.FC = () => {
     }
   };
 
-  const handleOverlayMouseUp = () => {
+  const finishRectangleCreation = useCallback((clientX: number, clientY: number) => {
+    const creation = rectangleCreationRef.current;
+    if (!creation) return;
+
+    rectangleCreationRef.current = null;
+    suppressOverlayClickRef.current = true;
+    const moved = Math.hypot(
+      clientX - creation.clientX,
+      clientY - creation.clientY,
+    ) > 3;
+
+    if (!creation.isFirstPoint || moved) {
+      const point = getChartDataPoint(clientX, clientY);
+      if (point) {
+        const id = crypto.randomUUID();
+        addDrawing({
+          id,
+          type: 'rectangle',
+          p1: creation.start,
+          p2: { time: point.time, price: point.price },
+          color: '#f59e0b',
+        });
+        setSelectedDrawingId(id);
+        setDrawingStartTool(null);
+        setDrawingStartPoint(null);
+        setActiveTool('cursor');
+      }
+    }
+  }, [addDrawing, getChartDataPoint, setActiveTool, setDrawingStartPoint, setDrawingStartTool, setSelectedDrawingId]);
+
+  const handleOverlayMouseUp = (e: React.MouseEvent) => {
+    finishRectangleCreation(e.clientX, e.clientY);
     if (dragState) {
       setDragState(null);
     }
   };
+
+  useEffect(() => {
+    const handleWindowMouseUp = (e: MouseEvent) => {
+      finishRectangleCreation(e.clientX, e.clientY);
+      setDragState(null);
+    };
+    window.addEventListener('mouseup', handleWindowMouseUp);
+    return () => window.removeEventListener('mouseup', handleWindowMouseUp);
+  }, [finishRectangleCreation]);
 
   const handleOverlayMouseLeave = () => {
     setCurrentMousePoint(null);
-    if (dragState) {
-      setDragState(null);
-    }
   };
 
   const handleOverlayClick = (e: React.MouseEvent) => {
+    if (suppressOverlayClickRef.current) {
+      suppressOverlayClickRef.current = false;
+      return;
+    }
     if (dragState) return;
 
     const pt = getChartDataPoint(e.clientX, e.clientY);
@@ -1237,13 +1335,15 @@ export const Chart: React.FC = () => {
           color: '#00d2ff',
         });
       } else if (activeTool === 'rectangle') {
+        const id = crypto.randomUUID();
         addDrawing({
-          id: crypto.randomUUID(),
+          id,
           type: 'rectangle',
           p1,
           p2,
           color: '#f59e0b',
         });
+        setSelectedDrawingId(id);
       } else if (activeTool === 'circle') {
         addDrawing({
           id: crypto.randomUUID(),
@@ -1266,6 +1366,7 @@ export const Chart: React.FC = () => {
     mode: 'move' | 'resize',
     handle?: string
   ) => {
+    if (activeTool !== 'cursor') return;
     e.stopPropagation();
     const pt = getChartDataPoint(e.clientX, e.clientY);
     if (!pt) return;
@@ -1298,6 +1399,25 @@ export const Chart: React.FC = () => {
     setTextInputPos(null);
     setTextInputValue('');
     setActiveTool('cursor');
+  };
+
+  const handleDrawingDoubleClick = (
+    e: React.MouseEvent<SVGElement>,
+    drawingId: string,
+  ) => {
+    if (activeTool !== 'cursor') return;
+    e.stopPropagation();
+    const point = getChartDataPoint(e.clientX, e.clientY);
+    if (!point) return;
+
+    setSelectedDrawingId(drawingId);
+    setTextInputPos({
+      x: point.x,
+      y: point.y,
+      point: { time: point.time, price: point.price },
+    });
+    setTextInputValue('');
+    setActiveTool('text');
   };
 
   const handleExecutePositionOrder = (d: PositionToolDrawing) => {
@@ -1687,11 +1807,16 @@ export const Chart: React.FC = () => {
       )}
 
       {/* Chart Canvas */}
-      <div ref={containerRef} className="flex-1 w-full h-full relative" />
+      <div
+        ref={containerRef}
+        className="flex-1 w-full h-full relative"
+        onClick={() => setSelectedDrawingId(null)}
+      />
 
       {/* SVG Interactive Drawing Layer */}
       <svg
         aria-label="Interactive Chart Drawings"
+        onMouseDown={handleOverlayMouseDown}
         onMouseMove={handleOverlayMouseMove}
         onMouseUp={handleOverlayMouseUp}
         onMouseLeave={handleOverlayMouseLeave}
@@ -1751,6 +1876,7 @@ export const Chart: React.FC = () => {
                 key={d.id}
                 className="pointer-events-auto group"
                 onClick={(e) => {
+                  if (activeTool !== 'cursor') return;
                   e.stopPropagation();
                   setSelectedDrawingId(d.id);
                 }}
@@ -1800,13 +1926,14 @@ export const Chart: React.FC = () => {
             );
           }
 
-          if (d.type === 'rectangle' && d.rect && d.corners) {
+          if (d.type === 'rectangle' && d.rect && d.corners && d.edgeHandles) {
             return (
               <g
                 key={d.id}
                 className={d.preview ? 'pointer-events-none' : 'pointer-events-auto'}
                 onClick={(e) => {
                   if (d.preview) return;
+                  if (activeTool !== 'cursor') return;
                   e.stopPropagation();
                   setSelectedDrawingId(d.id);
                 }}
@@ -1823,6 +1950,7 @@ export const Chart: React.FC = () => {
                   strokeDasharray={isSelected ? '4 2' : undefined}
                   className="cursor-move"
                   onMouseDown={(e) => startDrag(e, d.id, 'move')}
+                  onDoubleClick={(e) => handleDrawingDoubleClick(e, d.id)}
                 />
 
                 {/* 4 Corner Resize Handles when Selected */}
@@ -1868,6 +1996,54 @@ export const Chart: React.FC = () => {
                       className="cursor-nesw-resize hover:scale-125"
                       onMouseDown={(e) => startDrag(e, d.id, 'resize', 'bl')}
                     />
+                    <circle
+                      cx={d.edgeHandles.left.x}
+                      cy={d.edgeHandles.left.y}
+                      r="4.5"
+                      fill="#f59e0b"
+                      stroke="#ffffff"
+                      strokeWidth="1.5"
+                      className="cursor-ew-resize"
+                      onMouseDown={(e) => startDrag(e, d.id, 'resize', 'left')}
+                    >
+                      <title>Adjust length</title>
+                    </circle>
+                    <circle
+                      cx={d.edgeHandles.right.x}
+                      cy={d.edgeHandles.right.y}
+                      r="4.5"
+                      fill="#f59e0b"
+                      stroke="#ffffff"
+                      strokeWidth="1.5"
+                      className="cursor-ew-resize"
+                      onMouseDown={(e) => startDrag(e, d.id, 'resize', 'right')}
+                    >
+                      <title>Adjust length</title>
+                    </circle>
+                    <circle
+                      cx={d.edgeHandles.top.x}
+                      cy={d.edgeHandles.top.y}
+                      r="4.5"
+                      fill="#f59e0b"
+                      stroke="#ffffff"
+                      strokeWidth="1.5"
+                      className="cursor-ns-resize"
+                      onMouseDown={(e) => startDrag(e, d.id, 'resize', 'top')}
+                    >
+                      <title>Adjust width</title>
+                    </circle>
+                    <circle
+                      cx={d.edgeHandles.bottom.x}
+                      cy={d.edgeHandles.bottom.y}
+                      r="4.5"
+                      fill="#f59e0b"
+                      stroke="#ffffff"
+                      strokeWidth="1.5"
+                      className="cursor-ns-resize"
+                      onMouseDown={(e) => startDrag(e, d.id, 'resize', 'bottom')}
+                    >
+                      <title>Adjust width</title>
+                    </circle>
                   </>
                 )}
               </g>
@@ -1881,6 +2057,7 @@ export const Chart: React.FC = () => {
                 className={d.preview ? 'pointer-events-none' : 'pointer-events-auto'}
                 onClick={(e) => {
                   if (d.preview) return;
+                  if (activeTool !== 'cursor') return;
                   e.stopPropagation();
                   setSelectedDrawingId(d.id);
                 }}
@@ -1896,7 +2073,10 @@ export const Chart: React.FC = () => {
                   strokeWidth={isSelected ? '2.5' : '1.5'}
                   className="cursor-move"
                   onMouseDown={(e) => startDrag(e, d.id, 'move')}
-                />
+                  onDoubleClick={(e) => handleDrawingDoubleClick(e, d.id)}
+                >
+                  <title>Double-click to add a text note</title>
+                </ellipse>
 
                 {/* Handles when Selected */}
                 {isSelected && (
@@ -1936,6 +2116,7 @@ export const Chart: React.FC = () => {
                 transform={`translate(${d.text.x}, ${d.text.y})`}
                 className="pointer-events-auto group cursor-move"
                 onClick={(e) => {
+                  if (activeTool !== 'cursor') return;
                   e.stopPropagation();
                   setSelectedDrawingId(d.id);
                 }}
@@ -1967,6 +2148,7 @@ export const Chart: React.FC = () => {
                 key={d.id}
                 className="pointer-events-auto"
                 onClick={(e) => {
+                  if (activeTool !== 'cursor') return;
                   e.stopPropagation();
                   setSelectedDrawingId(d.id);
                 }}

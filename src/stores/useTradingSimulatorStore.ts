@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
 import {
   Candle,
   DatasetMetadata,
@@ -99,7 +100,7 @@ interface TradingSimulatorState {
 const initialReplayEngine = new ReplayEngine([]);
 const initialTradingEngine = new TradingEngine(1000);
 
-export const useTradingSimulatorStore = create<TradingSimulatorState>((set, get) => {
+export const useTradingSimulatorStore = create<TradingSimulatorState>()(persist((set, get) => {
   // Sync engine tick callback with store state
   const syncFromTick = (candle: Candle, index: number) => {
     const { tradingEngine, replayEngine } = get();
@@ -642,4 +643,9 @@ export const useTradingSimulatorStore = create<TradingSimulatorState>((set, get)
       set({ dataError: null, orderError: null });
     },
   };
-});
+}, {
+  name: 'autick-chart-drawings',
+  storage: createJSONStorage(() => localStorage),
+  partialize: (state) => ({ drawings: state.drawings }),
+  skipHydration: true,
+}));
