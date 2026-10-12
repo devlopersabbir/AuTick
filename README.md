@@ -139,6 +139,19 @@ cp .env.example .env.local
 # Set your TWELVE_DATA_API_KEY in .env.local
 ```
 
+For Vercel, configure server-side values under **Project Settings → Environment
+Variables** and redeploy:
+
+- `DEFAULT_DATA_PROVIDER=bybit` keeps Bybit as the default source.
+- `TWELVE_DATA_API_KEY` enables Twelve Data fallback if Bybit returns a regional
+  HTTP 403. Twelve Data is a separate XAU/USD feed and may not match Bybit
+  TradFi prices. Its HTTP 429 response means its request quota/rate limit was
+  reached, not that the key is necessarily missing.
+
+Live polling uses a shorter interval for Bybit and backs off for Twelve Data or
+rate-limit responses. A 429 response includes `Retry-After` so clients do not
+continue retrying once per second.
+
 ### Running Locally
 
 ```bash

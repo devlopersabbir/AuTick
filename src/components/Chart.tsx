@@ -14,6 +14,7 @@ import { useChartInteractions } from '@/components/chart/useChartInteractions';
 import { useChartLifecycle } from '@/components/chart/useChartLifecycle';
 import { useChartCoordinates } from '@/components/chart/useChartCoordinates';
 import { useChartMarketClock } from '@/components/chart/useChartMarketClock';
+import { useLiveMarketPolling } from '@/components/chart/useLiveMarketPolling';
 import { useChartIndicatorSettings } from '@/components/chart/useChartIndicatorSettings';
 import { ChartIndicatorSettings } from '@/components/chart/ChartIndicatorSettings';
 import { FairValueGapOverlay } from '@/components/chart/FairValueGapOverlay';
@@ -101,6 +102,8 @@ export const Chart: React.FC = () => {
     isMarketOpen,
   } = useChartMarketClock({ currentCandle, currentTimeframe, isLiveMode });
 
+  useLiveMarketPolling({ isLiveMode, currentTimeframe, updateLiveCandles });
+
   useChartLifecycle({
     containerRef, chartRef, seriesRef, chartTheme, setHoveredCandle, setViewportKey,
     candles, currentIndex, isLiveMode, currentCandle, openPosition, tradeHistory,
@@ -113,39 +116,6 @@ export const Chart: React.FC = () => {
   useEffect(() => {
     void useTradingSimulatorStore.persist.rehydrate();
   }, []);
-
-  // Real-time live market polling interval (every 2.5s)
-  useEffect(() => {
-    if (!isLiveMode) return;
-
-    let isMounted = true;
-    let isRequestInFlight = false;
-    const pollLive = async () => {
-      if (isRequestInFlight) return;
-      isRequestInFlight = true;
-      try {
-        const res = await fetch(`/api/market-data?live=true&timeframe=${currentTimeframe}`, {
-          cache: 'no-store',
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (isMounted && data.success && Array.isArray(data.candles) && data.candles.length > 0) {
-          updateLiveCandles(data.candles);
-        }
-      } catch {
-        // Silent catch for network hiccups
-      } finally {
-        isRequestInFlight = false;
-      }
-    };
-
-    void pollLive();
-    const intervalId = setInterval(pollLive, 1000);
-    return () => {
-      isMounted = false;
-      clearInterval(intervalId);
-    };
-  }, [isLiveMode, currentTimeframe, updateLiveCandles]);
 
   const getChartDataPoint = useChartCoordinates({
     chartRef,

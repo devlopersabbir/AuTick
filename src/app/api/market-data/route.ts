@@ -17,7 +17,16 @@ async function fetchWithFallback<T>(
   } catch (error) {
     const fallbackCandidate = shouldFallbackToAlternateProvider(error, providerParam, !!process.env.TWELVE_DATA_API_KEY);
     if (fallbackCandidate && fallbackFetcher) {
-      return await fallbackFetcher();
+      try {
+        return await fallbackFetcher();
+      } catch (fallbackError) {
+        const primaryMessage = error instanceof Error ? error.message : String(error);
+        const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+        throw new Error(
+          `Primary provider failed: ${primaryMessage}. Alternate provider also failed: ${fallbackMessage}`,
+          { cause: error },
+        );
+      }
     }
     throw error;
   }
@@ -87,11 +96,22 @@ export async function GET(request: NextRequest): Promise<NextResponse<MarketData
               timeframe: timeframeParam,
             }).then((result) => result.candles)
         : undefined;
-      const candles = await fetchWithFallback(providerParam, fetchLatest, fetchFallbackLatest);
+      let activeProviderId = provider.id;
+      const candles = await fetchWithFallback(
+        providerParam,
+        fetchLatest,
+        fallbackProvider && fetchFallbackLatest
+          ? async () => {
+              activeProviderId = fallbackProvider.id;
+              return fetchFallbackLatest();
+            }
+          : undefined,
+      );
 
       return NextResponse.json({
         success: true,
         candles,
+        provider: activeProviderId,
       });
     }
 
@@ -195,12 +215,16 @@ export async function GET(request: NextRequest): Promise<NextResponse<MarketData
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'An unexpected server error occurred';
+    const isRateLimited = /HTTP error 429|Too Many Requests/i.test(message);
     return NextResponse.json(
       {
         success: false,
         error: message,
       },
-      { status: 500 }
+      {
+        status: isRateLimited ? 429 : 500,
+        headers: isRateLimited ? { 'Retry-After': '60' } : undefined,
+      }
     );
   }
 }
