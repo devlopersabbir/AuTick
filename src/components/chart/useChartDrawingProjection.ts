@@ -5,6 +5,7 @@ import type { DataPoint, Drawing, PositionToolDrawing, ToolType } from '@/types/
 import type { TradingSimulatorState } from '@/stores/tradingSimulatorStoreTypes';
 import { TIMEFRAME_SECONDS } from './chartConstants';
 import { ProjectedDrawing, ProjectedPreview } from './chartTypes';
+import { formatPositionToolRiskReward, getPositionToolTargetTime } from '@/lib/trading/position-tool';
 
 interface ProjectionOptions {
   chartRef: { current: IChartApi | null };
@@ -188,14 +189,14 @@ export function useChartDrawingProjection({
         const endX = d.targetTime ? timeScale.timeToCoordinate(d.targetTime as UTCTimestamp) : null;
 
         if (entryY !== null && slY !== null && tpY !== null && startX !== null) {
-          const boxWidth = Math.max(140, endX !== null ? endX - startX : 200);
+          const boxWidth = Math.max(80, endX !== null ? endX - startX : 200);
           const targetZoneTop = Math.min(entryY, tpY);
           const targetZoneHeight = Math.abs(tpY - entryY);
           const stopZoneTop = Math.min(entryY, slY);
           const stopZoneHeight = Math.abs(slY - entryY);
           const riskPts = Math.abs(d.entryPoint.price - d.stopLossPrice) * d.quantity;
           const rewardPts = Math.abs(d.takeProfitPrice - d.entryPoint.price) * d.quantity;
-          const rrRatio = riskPts > 0 ? (rewardPts / riskPts).toFixed(2) : '0.00';
+          const rrRatio = formatPositionToolRiskReward(riskPts, rewardPts);
 
           results.push({
             id: d.id,
@@ -243,7 +244,10 @@ export function useChartDrawingProjection({
         stopLossPrice: orderPreview.stopLoss,
         takeProfitPrice: orderPreview.takeProfit,
         quantity: orderPreview.quantity,
-        targetTime: currentCandle.timestamp + 25 * 60,
+        targetTime: getPositionToolTargetTime(
+          currentCandle.timestamp,
+          TIMEFRAME_SECONDS[currentTimeframe.toLowerCase()] ?? 60,
+        ),
       };
       const entryY = series.priceToCoordinate(previewDrawing.entryPoint.price);
       const slY = series.priceToCoordinate(previewDrawing.stopLossPrice);
@@ -252,7 +256,7 @@ export function useChartDrawingProjection({
       const endX = timeScale.timeToCoordinate(previewDrawing.targetTime as UTCTimestamp);
 
       if (entryY !== null && slY !== null && tpY !== null && startX !== null) {
-        const boxWidth = Math.max(140, endX !== null ? endX - startX : 200);
+        const boxWidth = Math.max(80, endX !== null ? endX - startX : 200);
         const targetZoneTop = Math.min(entryY, tpY);
         const stopZoneTop = Math.min(entryY, slY);
         const riskPts = Math.abs(previewDrawing.entryPoint.price - previewDrawing.stopLossPrice) *
@@ -276,7 +280,7 @@ export function useChartDrawingProjection({
             stopZoneHeight: Math.abs(slY - entryY),
             riskPts,
             rewardPts,
-            rrRatio: riskPts > 0 ? (rewardPts / riskPts).toFixed(2) : '0.00',
+            rrRatio: formatPositionToolRiskReward(riskPts, rewardPts),
             tpPrice: previewDrawing.takeProfitPrice,
             slPrice: previewDrawing.stopLossPrice,
             entryPrice: previewDrawing.entryPoint.price,

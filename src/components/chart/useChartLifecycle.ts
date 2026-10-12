@@ -8,6 +8,8 @@ import type { Candle } from '@/types';
 import type { TradingSimulatorState } from '@/stores/tradingSimulatorStoreTypes';
 import { useTradingSimulatorStore } from '@/stores/useTradingSimulatorStore';
 import { formatCrosshairTimeWithSession, formatTickMarkAmPm } from '@/lib/utils/sessions';
+import { findClosedCandleBreakouts } from '@/lib/market-data/breakout-indicator';
+import { TIMEFRAME_SECONDS } from './chartConstants';
 
 type ChartTheme = {
   upColor: string; downColor: string; wickUpColor: string; wickDownColor: string;
@@ -29,12 +31,14 @@ interface ChartLifecycleOptions {
   tradeHistory: TradingSimulatorState['tradeHistory'];
   candleCountdown: string | null;
   isMarketOpen: boolean;
+  breakoutEnabled: boolean;
+  currentTimeframe: string;
 }
 
 export function useChartLifecycle({
   containerRef, chartRef, seriesRef, chartTheme, setHoveredCandle, setViewportKey,
   candles, currentIndex, isLiveMode, currentCandle, openPosition, tradeHistory,
-  candleCountdown, isMarketOpen,
+  candleCountdown, isMarketOpen, breakoutEnabled, currentTimeframe,
 }: ChartLifecycleOptions) {
   const initialChartThemeRef = useRef(chartTheme);
   const markersPluginRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
@@ -432,9 +436,39 @@ export function useChartLifecycle({
       });
     }
 
+    if (isLiveMode && breakoutEnabled) {
+      const timeframeSeconds = TIMEFRAME_SECONDS[currentTimeframe.toLowerCase()] ?? 60;
+      const breakouts = findClosedCandleBreakouts(
+        candles,
+        currentIndex,
+        timeframeSeconds,
+        Math.floor(Date.now() / 1000),
+      );
+
+      for (const breakout of breakouts) {
+        markers.push({
+          time: breakout.time as UTCTimestamp,
+          position: breakout.direction === 'up' ? 'belowBar' : 'aboveBar',
+          color: breakout.direction === 'up' ? '#22c55e' : '#f97316',
+          shape: breakout.direction === 'up' ? 'arrowUp' : 'arrowDown',
+          text: breakout.direction === 'up' ? 'BO' : 'BD',
+        });
+      }
+    }
+
     markers.sort((a, b) => (a.time as number) - (b.time as number));
     markersPlugin.setMarkers(markers);
-  }, [openPosition, tradeHistory, currentCandle, seriesRef]);
+  }, [
+    openPosition,
+    tradeHistory,
+    currentCandle,
+    seriesRef,
+    candles,
+    currentIndex,
+    isLiveMode,
+    breakoutEnabled,
+    currentTimeframe,
+  ]);
 
   useEffect(() => {
     const series = seriesRef.current;

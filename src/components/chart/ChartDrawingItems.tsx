@@ -390,7 +390,7 @@ export const ChartDrawingItems: React.FC<ChartDrawingItemsProps> = ({
                   x2={pos.startX + pos.boxWidth}
                   y2={pos.entryY}
                   stroke="#ffffff"
-                  strokeWidth="2"
+                  strokeWidth={isSelected ? '2.5' : '1.5'}
                   strokeDasharray="4 2"
                   className={d.preview ? undefined : 'cursor-move'}
                   onMouseDown={d.preview ? undefined : (e) => startDrag(e, d.id, 'move')}
@@ -444,6 +444,17 @@ export const ChartDrawingItems: React.FC<ChartDrawingItemsProps> = ({
                       strokeWidth="2"
                       className="cursor-ns-resize hover:scale-125"
                       onMouseDown={(e) => startDrag(e, d.id, 'resize', 'sl')}
+                    />
+                    {/* Entry Handle (Move entry while preserving risk and reward distances) */}
+                    <circle
+                      cx={pos.entryHandle.x}
+                      cy={pos.entryHandle.y}
+                      r="5.5"
+                      fill="#ffffff"
+                      stroke="#64748b"
+                      strokeWidth="2"
+                      className="cursor-ns-resize hover:scale-125"
+                      onMouseDown={(e) => startDrag(e, d.id, 'resize', 'entry')}
                     />
                     {/* Right Handle (Drag to adjust Width / Target Time) */}
                     <circle

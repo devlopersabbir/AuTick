@@ -14,8 +14,11 @@ import { useChartInteractions } from '@/components/chart/useChartInteractions';
 import { useChartLifecycle } from '@/components/chart/useChartLifecycle';
 import { useChartCoordinates } from '@/components/chart/useChartCoordinates';
 import { useChartMarketClock } from '@/components/chart/useChartMarketClock';
+import { useChartIndicatorSettings } from '@/components/chart/useChartIndicatorSettings';
+import { ChartSettingsModal } from '@/components/chart/ChartSettingsModal';
 import {
   Activity,
+  Settings2,
   X,
   Zap,
 } from 'lucide-react';
@@ -84,6 +87,8 @@ export const Chart: React.FC = () => {
     borderDownColor: '#f23645',
   });
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const { settings, setBreakoutEnabled } = useChartIndicatorSettings();
   const {
     sessionCountdown,
     sessionAction,
@@ -95,6 +100,8 @@ export const Chart: React.FC = () => {
     containerRef, chartRef, seriesRef, chartTheme, setHoveredCandle, setViewportKey,
     candles, currentIndex, isLiveMode, currentCandle, openPosition, tradeHistory,
     candleCountdown, isMarketOpen,
+    breakoutEnabled: settings.breakoutEnabled,
+    currentTimeframe,
   });
 
   useEffect(() => {
@@ -294,6 +301,26 @@ export const Chart: React.FC = () => {
           setActiveTool('cursor');
           setDrawingStartPoint(null);
         }}
+      />
+
+      <button
+        type="button"
+        onClick={() => setIsSettingsOpen(true)}
+        title="Chart settings"
+        aria-label="Open chart settings"
+        className="absolute right-4 top-3 z-20 flex h-8 w-8 items-center justify-center rounded-md border border-[#303844] bg-[#0d111a]/90 text-neutral-400 shadow-lg backdrop-blur-md transition-colors hover:border-amber-400/60 hover:text-amber-300"
+      >
+        <Settings2 className="h-4 w-4" />
+        {settings.breakoutEnabled && (
+          <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-amber-400" />
+        )}
+      </button>
+
+      <ChartSettingsModal
+        isOpen={isSettingsOpen}
+        breakoutEnabled={settings.breakoutEnabled}
+        onToggleBreakout={setBreakoutEnabled}
+        onClose={() => setIsSettingsOpen(false)}
       />
 
       <SelectedDrawingToolbar

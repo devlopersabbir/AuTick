@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useTradingSimulatorStore } from '@/stores/useTradingSimulatorStore';
 import type { DataPoint, Drawing, PositionToolDrawing, ToolType } from '@/types/drawings';
+import {
+  getDefaultPositionLevels,
+  getPositionToolTargetTime,
+  movePositionTool,
+  resizePositionToolLevel,
+  resizePositionToolWidth,
+} from '@/lib/trading/position-tool';
+import { TIMEFRAME_SECONDS } from './chartConstants';
 import type { DragState } from './chartTypes';
 
 type ChartPoint = DataPoint & { x: number; y: number };
@@ -40,6 +48,7 @@ export function useChartInteractions({
   const orderPreview = useTradingSimulatorStore((state) => state.orderPreview);
   const addDrawing = useTradingSimulatorStore((state) => state.addDrawing);
   const updateDrawing = useTradingSimulatorStore((state) => state.updateDrawing);
+  const currentTimeframe = useTradingSimulatorStore((state) => state.currentTimeframe);
   const setActiveTool = useTradingSimulatorStore((state) => state.setActiveTool);
   const setSelectedDrawingId = useTradingSimulatorStore((state) => state.setSelectedDrawingId);
   const cutToBar = useTradingSimulatorStore((state) => state.cutToBar);
@@ -113,12 +122,10 @@ export function useChartInteractions({
             point: { time: init.point.time + deltaTime, price: init.point.price + deltaPrice },
           });
         } else if (init.type === 'long_position' || init.type === 'short_position') {
-          updateDrawing(dragState.drawingId, {
-            entryPoint: { time: init.entryPoint.time + deltaTime, price: init.entryPoint.price + deltaPrice },
-            stopLossPrice: init.stopLossPrice + deltaPrice,
-            takeProfitPrice: init.takeProfitPrice + deltaPrice,
-            targetTime: init.targetTime !== undefined ? init.targetTime + deltaTime : undefined,
-          });
+          updateDrawing(dragState.drawingId, movePositionTool(init, {
+            time: init.entryPoint.time + deltaTime,
+            price: init.entryPoint.price + deltaPrice,
+          }));
         }
       } else if (dragState.mode === 'resize') {
         const handle = dragState.handle;
@@ -157,15 +164,19 @@ export function useChartInteractions({
           }
         } else if (init.type === 'long_position' || init.type === 'short_position') {
           if (handle === 'tp') {
-            updateDrawing(dragState.drawingId, { takeProfitPrice: currentPoint.price });
+            updateDrawing(dragState.drawingId, resizePositionToolLevel(init, 'takeProfitPrice', currentPoint.price));
           } else if (handle === 'sl') {
-            updateDrawing(dragState.drawingId, { stopLossPrice: currentPoint.price });
+            updateDrawing(dragState.drawingId, resizePositionToolLevel(init, 'stopLossPrice', currentPoint.price));
           } else if (handle === 'entry') {
-            updateDrawing(dragState.drawingId, {
-              entryPoint: { time: init.entryPoint.time, price: currentPoint.price },
-            });
+            updateDrawing(dragState.drawingId, movePositionTool(init, {
+              time: init.entryPoint.time,
+              price: currentPoint.price,
+            }));
           } else if (handle === 'right') {
-            updateDrawing(dragState.drawingId, { targetTime: currentPoint.time });
+            const timeframeSeconds = TIMEFRAME_SECONDS[currentTimeframe.toLowerCase()] ?? 60;
+            updateDrawing(dragState.drawingId, {
+              targetTime: resizePositionToolWidth(init, currentPoint.time, timeframeSeconds),
+            });
           }
         }
       }
@@ -257,18 +268,18 @@ export function useChartInteractions({
     if (activeTool === 'long_position') {
       const entryPrice = Math.round(clickedPoint.price * 100) / 100;
       const preview = orderPreview?.side === 'LONG' ? orderPreview : null;
-      const slPrice = preview?.stopLoss ??
-        Math.round((entryPrice - 10) * 100) / 100;
-      const tpPrice = preview?.takeProfit ??
-        Math.round((entryPrice + 20) * 100) / 100;
-      const targetTime = clickedPoint.time + 25 * 60;
+      const defaults = getDefaultPositionLevels('long_position', entryPrice);
+      const targetTime = getPositionToolTargetTime(
+        clickedPoint.time,
+        TIMEFRAME_SECONDS[currentTimeframe.toLowerCase()] ?? 60,
+      );
 
       addDrawing({
         id: crypto.randomUUID(),
         type: 'long_position',
         entryPoint: clickedPoint,
-        stopLossPrice: slPrice,
-        takeProfitPrice: tpPrice,
+        stopLossPrice: preview?.stopLoss ?? defaults.stopLossPrice,
+        takeProfitPrice: preview?.takeProfit ?? defaults.takeProfitPrice,
         quantity: preview?.quantity ?? 1,
         targetTime,
       });
@@ -281,18 +292,18 @@ export function useChartInteractions({
     if (activeTool === 'short_position') {
       const entryPrice = Math.round(clickedPoint.price * 100) / 100;
       const preview = orderPreview?.side === 'SHORT' ? orderPreview : null;
-      const slPrice = preview?.stopLoss ??
-        Math.round((entryPrice + 10) * 100) / 100;
-      const tpPrice = preview?.takeProfit ??
-        Math.round((entryPrice - 20) * 100) / 100;
-      const targetTime = clickedPoint.time + 25 * 60;
+      const defaults = getDefaultPositionLevels('short_position', entryPrice);
+      const targetTime = getPositionToolTargetTime(
+        clickedPoint.time,
+        TIMEFRAME_SECONDS[currentTimeframe.toLowerCase()] ?? 60,
+      );
 
       addDrawing({
         id: crypto.randomUUID(),
         type: 'short_position',
         entryPoint: clickedPoint,
-        stopLossPrice: slPrice,
-        takeProfitPrice: tpPrice,
+        stopLossPrice: preview?.stopLoss ?? defaults.stopLossPrice,
+        takeProfitPrice: preview?.takeProfit ?? defaults.takeProfitPrice,
         quantity: preview?.quantity ?? 1,
         targetTime,
       });
