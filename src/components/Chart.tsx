@@ -104,7 +104,7 @@ interface ProjectedDrawing {
   edgeHandle?: { x: number; y: number };
 
   // For text
-  text?: { x: number; y: number; text: string };
+  text?: { x: number; y: number; text: string; fontSize: number };
 
   // For position tool
   position?: {
@@ -194,6 +194,9 @@ export const Chart: React.FC = () => {
   const [currentMousePoint, setCurrentMousePoint] = useState<{ x: number; y: number; time: number; price: number } | null>(null);
   const [textInputPos, setTextInputPos] = useState<{ x: number; y: number; point: DataPoint } | null>(null);
   const [textInputValue, setTextInputValue] = useState('');
+  const [textColor, setTextColor] = useState('#ffffff');
+  const [textFontSize, setTextFontSize] = useState(14);
+  const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [orderNotice, setOrderNotice] = useState<string | null>(null);
 
   // Dragging and resizing state
@@ -747,7 +750,7 @@ export const Chart: React.FC = () => {
             hidden: d.hidden,
             raw: d,
             anchor: pt,
-            text: { x: pt.x, y: pt.y, text: d.text },
+            text: { x: pt.x, y: pt.y, text: d.text, fontSize: d.fontSize ?? 14 },
           });
         }
       } else if (d.type === 'long_position' || d.type === 'short_position') {
@@ -1315,6 +1318,9 @@ export const Chart: React.FC = () => {
     if (activeTool === 'text') {
       setTextInputPos({ x: pt.x, y: pt.y, point: clickedPoint });
       setTextInputValue('');
+      setTextColor('#ffffff');
+      setTextFontSize(14);
+      setEditingTextId(null);
       return;
     }
 
@@ -1388,16 +1394,33 @@ export const Chart: React.FC = () => {
 
   const handleSaveTextAnnotation = () => {
     if (textInputPos && textInputValue.trim()) {
-      addDrawing({
-        id: crypto.randomUUID(),
-        type: 'text',
-        point: textInputPos.point,
-        text: textInputValue.trim(),
-        color: '#fde047',
-      });
+      if (editingTextId) {
+        updateDrawing(editingTextId, {
+          text: textInputValue.trim(),
+          color: textColor,
+          fontSize: textFontSize,
+        });
+      } else {
+        addDrawing({
+          id: crypto.randomUUID(),
+          type: 'text',
+          point: textInputPos.point,
+          text: textInputValue.trim(),
+          color: textColor,
+          fontSize: textFontSize,
+        });
+      }
     }
     setTextInputPos(null);
     setTextInputValue('');
+    setEditingTextId(null);
+    setActiveTool('cursor');
+  };
+
+  const cancelTextAnnotation = () => {
+    setTextInputPos(null);
+    setTextInputValue('');
+    setEditingTextId(null);
     setActiveTool('cursor');
   };
 
@@ -1417,6 +1440,28 @@ export const Chart: React.FC = () => {
       point: { time: point.time, price: point.price },
     });
     setTextInputValue('');
+    setTextColor('#ffffff');
+    setTextFontSize(14);
+    setEditingTextId(null);
+    setActiveTool('text');
+  };
+
+  const handleTextDoubleClick = (e: React.MouseEvent<SVGGElement>, drawing: Drawing) => {
+    if (drawing.type !== 'text' || activeTool !== 'cursor') return;
+    e.stopPropagation();
+    const point = getChartDataPoint(e.clientX, e.clientY);
+    if (!point) return;
+
+    setSelectedDrawingId(drawing.id);
+    setTextInputPos({
+      x: point.x,
+      y: point.y,
+      point: drawing.point,
+    });
+    setTextInputValue(drawing.text);
+    setTextColor(drawing.color ?? '#ffffff');
+    setTextFontSize(drawing.fontSize ?? 14);
+    setEditingTextId(drawing.id);
     setActiveTool('text');
   };
 
@@ -2120,19 +2165,17 @@ export const Chart: React.FC = () => {
                   e.stopPropagation();
                   setSelectedDrawingId(d.id);
                 }}
+                onDoubleClick={(e) => handleTextDoubleClick(e, d.raw)}
                 onMouseDown={(e) => startDrag(e, d.id, 'move')}
               >
-                <rect
+                <text
                   x="0"
-                  y="-18"
-                  width={d.text.text.length * 7 + 16}
-                  height="22"
-                  rx="4"
-                  fill="#161b26"
-                  stroke={isSelected ? '#ffffff' : (d.color || '#fde047')}
-                  strokeWidth={isSelected ? '2' : '1'}
-                />
-                <text x="8" y="-3" fill="#ffffff" fontSize="11" fontWeight="600">
+                  y="0"
+                  fill={d.color || '#ffffff'}
+                  fontSize={d.text.fontSize}
+                  fontFamily="sans-serif"
+                  fontWeight="400"
+                >
                   {d.text.text}
                 </text>
               </g>
@@ -2396,7 +2439,7 @@ export const Chart: React.FC = () => {
       {textInputPos && (
         <div
           style={{ left: textInputPos.x, top: textInputPos.y }}
-          className="absolute z-30 bg-[#141926] border border-amber-500/50 p-2 rounded-lg shadow-2xl backdrop-blur-md flex items-center space-x-2"
+          className="absolute z-30 flex items-center gap-2 rounded border border-[#303844] bg-[#101318] p-2 shadow-xl"
         >
           <input
             type="text"
@@ -2405,29 +2448,46 @@ export const Chart: React.FC = () => {
             onChange={(e) => setTextInputValue(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleSaveTextAnnotation();
-              if (e.key === 'Escape') {
-                setTextInputPos(null);
-                setTextInputValue('');
-                setActiveTool('cursor');
-              }
+              if (e.key === 'Escape') cancelTextAnnotation();
             }}
-            placeholder="Annotation text..."
-            className="bg-[#0b0e14] border border-[#232b3d] px-2 py-1 text-xs text-white rounded outline-none focus:border-amber-500 w-44 font-mono"
+            placeholder="Text"
+            aria-label="Annotation text"
+            className="w-36 rounded border border-[#303844] bg-[#0b0e14] px-2 py-1.5 text-sm text-white outline-none focus:border-neutral-400"
           />
+          <label className="flex items-center gap-1 text-xs text-neutral-400" title="Font size">
+            <span>Size</span>
+            <select
+              value={textFontSize}
+              onChange={(e) => setTextFontSize(Number(e.target.value))}
+              aria-label="Font size"
+              className="rounded border border-[#303844] bg-[#0b0e14] px-1.5 py-1.5 text-xs text-neutral-100"
+            >
+              {[12, 14, 16, 18, 20, 24, 28, 32].map((size) => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-1 text-xs text-neutral-400" title="Text color">
+            <span>Color</span>
+            <input
+              type="color"
+              value={textColor}
+              onChange={(e) => setTextColor(e.target.value)}
+              aria-label="Text color"
+              className="h-7 w-8 cursor-pointer rounded border border-[#303844] bg-transparent p-0.5"
+            />
+          </label>
           <button
+            type="button"
             onClick={handleSaveTextAnnotation}
-            className="bg-amber-500 hover:bg-amber-400 text-black px-2 py-1 rounded text-xs font-bold transition-all cursor-pointer"
+            className="rounded bg-neutral-200 px-2.5 py-1.5 text-xs font-medium text-neutral-900 transition-colors hover:bg-white"
           >
-            Add
+            {editingTextId ? 'Save' : 'Add'}
           </button>
           <button
             type="button"
             aria-label="Cancel text annotation"
-            onClick={() => {
-              setTextInputPos(null);
-              setTextInputValue('');
-              setActiveTool('cursor');
-            }}
+            onClick={cancelTextAnnotation}
             className="text-neutral-400 hover:text-white text-xs cursor-pointer"
           >
             <X className="h-4 w-4" />

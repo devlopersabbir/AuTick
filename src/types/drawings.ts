@@ -49,6 +49,7 @@ export interface TextDrawing extends DrawingBase {
   type: 'text';
   point: DataPoint;
   text: string;
+  fontSize?: number;
 }
 
 export interface PositionToolDrawing extends DrawingBase {
