@@ -4,6 +4,7 @@ export type ToolType =
   | 'trendline'
   | 'horizontal_line'
   | 'rectangle'
+  | 'price_range'
   | 'circle'
   | 'text'
   | 'long_position'
@@ -39,6 +40,12 @@ export interface RectangleDrawing extends DrawingBase {
   p2: DataPoint;
 }
 
+export interface PriceRangeDrawing extends DrawingBase {
+  type: 'price_range';
+  p1: DataPoint;
+  p2: DataPoint;
+}
+
 export interface CircleDrawing extends DrawingBase {
   type: 'circle';
   center: DataPoint;
@@ -65,6 +72,7 @@ export type Drawing =
   | TrendlineDrawing
   | HorizontalLineDrawing
   | RectangleDrawing
+  | PriceRangeDrawing
   | CircleDrawing
   | TextDrawing
   | PositionToolDrawing;

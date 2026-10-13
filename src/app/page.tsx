@@ -69,6 +69,9 @@ export default function Home() {
       } else if (e.code === 'KeyV' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
         setActiveTool('cursor');
+      } else if (e.code === 'KeyP' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        setActiveTool(activeTool === 'price_range' ? 'cursor' : 'price_range');
       } else if (e.code === 'Escape') {
         setActiveTool('cursor');
       }

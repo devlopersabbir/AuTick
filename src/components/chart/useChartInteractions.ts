@@ -54,6 +54,7 @@ export function useChartInteractions({
   const cutToBar = useTradingSimulatorStore((state) => state.cutToBar);
   const openOrder = useTradingSimulatorStore((state) => state.openOrder);
   const rectangleCreationRef = useRef<{
+    tool: 'rectangle' | 'price_range';
     start: DataPoint;
     clientX: number;
     clientY: number;
@@ -63,23 +64,24 @@ export function useChartInteractions({
 
   // Mouse interaction handler on SVG overlay
   const handleOverlayMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (activeTool !== 'rectangle' || e.button !== 0) return;
+    if ((activeTool !== 'rectangle' && activeTool !== 'price_range') || e.button !== 0) return;
     const point = getChartDataPoint(e.clientX, e.clientY);
     if (!point) return;
 
-    const isFirstPoint = !drawingStartPoint || drawingStartTool !== 'rectangle';
+    const isFirstPoint = !drawingStartPoint || drawingStartTool !== activeTool;
     const start = isFirstPoint
       ? { time: point.time, price: point.price }
       : drawingStartPoint;
 
     rectangleCreationRef.current = {
+      tool: activeTool,
       start,
       clientX: e.clientX,
       clientY: e.clientY,
       isFirstPoint,
     };
     if (isFirstPoint) {
-      setDrawingStartTool('rectangle');
+      setDrawingStartTool(activeTool);
       setDrawingStartPoint(start);
     }
     setCurrentMousePoint(point);
@@ -108,6 +110,11 @@ export function useChartInteractions({
             price: init.price + deltaPrice,
           });
         } else if (init.type === 'rectangle') {
+          updateDrawing(dragState.drawingId, {
+            p1: { time: init.p1.time + deltaTime, price: init.p1.price + deltaPrice },
+            p2: { time: init.p2.time + deltaTime, price: init.p2.price + deltaPrice },
+          });
+        } else if (init.type === 'price_range') {
           updateDrawing(dragState.drawingId, {
             p1: { time: init.p1.time + deltaTime, price: init.p1.price + deltaPrice },
             p2: { time: init.p2.time + deltaTime, price: init.p2.price + deltaPrice },
@@ -149,6 +156,12 @@ export function useChartInteractions({
               priceOwner.price = currentPoint.price;
             }
             updateDrawing(dragState.drawingId, { p1, p2 });
+          }
+        } else if (init.type === 'price_range') {
+          if (handle === 'p1') {
+            updateDrawing(dragState.drawingId, { p1: currentPoint });
+          } else if (handle === 'p2') {
+            updateDrawing(dragState.drawingId, { p2: currentPoint });
           }
         } else if (init.type === 'circle') {
           if (handle === 'center') {
@@ -194,6 +207,7 @@ export function useChartInteractions({
     if (!creation) return;
 
     rectangleCreationRef.current = null;
+    if (activeTool !== creation.tool) return;
     suppressOverlayClickRef.current = true;
     const moved = Math.hypot(
       clientX - creation.clientX,
@@ -205,19 +219,29 @@ export function useChartInteractions({
       if (point) {
         const id = crypto.randomUUID();
         setActiveTool('cursor');
-        addDrawing({
-          id,
-          type: 'rectangle',
-          p1: creation.start,
-          p2: { time: point.time, price: point.price },
-          color: '#f59e0b',
-        });
+        if (creation.tool === 'rectangle') {
+          addDrawing({
+            id,
+            type: 'rectangle',
+            p1: creation.start,
+            p2: { time: point.time, price: point.price },
+            color: '#f59e0b',
+          });
+        } else {
+          addDrawing({
+            id,
+            type: 'price_range',
+            p1: creation.start,
+            p2: { time: point.time, price: point.price },
+            color: '#38bdf8',
+          });
+        }
         setSelectedDrawingId(id);
         setDrawingStartTool(null);
         setDrawingStartPoint(null);
       }
     }
-  }, [addDrawing, getChartDataPoint, setActiveTool, setDrawingStartPoint, setDrawingStartTool, setSelectedDrawingId]);
+  }, [activeTool, addDrawing, getChartDataPoint, setActiveTool, setDrawingStartPoint, setDrawingStartTool, setSelectedDrawingId]);
 
   const handleOverlayMouseUp = (e: React.MouseEvent) => {
     finishRectangleCreation(e.clientX, e.clientY);
@@ -370,6 +394,16 @@ export function useChartInteractions({
           p1,
           p2,
           color: '#f59e0b',
+        });
+        setSelectedDrawingId(id);
+      } else if (activeTool === 'price_range') {
+        const id = crypto.randomUUID();
+        addDrawing({
+          id,
+          type: 'price_range',
+          p1,
+          p2,
+          color: '#38bdf8',
         });
         setSelectedDrawingId(id);
       } else if (activeTool === 'circle') {

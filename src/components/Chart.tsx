@@ -240,7 +240,11 @@ export const Chart: React.FC = () => {
         ? 'Click a price level to place a horizontal line. Esc to cancel.'
         : activeTool === 'text'
           ? 'Click the chart to add a text note. Esc to cancel.'
-          : activeTool === 'cursor'
+          : activeTool === 'price_range'
+            ? drawingStartPoint && drawingStartTool === activeTool
+              ? 'Click a second point to measure the price move. Esc to cancel.'
+              : 'Click a starting price, then an ending price. Esc to cancel.'
+        : activeTool === 'cursor'
             ? ''
             : drawingStartPoint && drawingStartTool === activeTool
               ? 'Click a second point to finish. Esc to cancel.'
@@ -472,6 +476,40 @@ export const Chart: React.FC = () => {
                 strokeWidth="1.5"
                 strokeDasharray="4 2"
               />
+            )}
+
+            {projectedPreview.priceRange && (
+              <>
+                <rect
+                  x={projectedPreview.priceRange.x}
+                  y={projectedPreview.priceRange.y}
+                  width={projectedPreview.priceRange.width}
+                  height={projectedPreview.priceRange.height}
+                  fill={projectedPreview.priceRange.change >= 0
+                    ? 'rgba(8, 153, 129, 0.16)'
+                    : 'rgba(242, 54, 69, 0.16)'}
+                  stroke={projectedPreview.priceRange.change >= 0 ? '#089981' : '#f23645'}
+                  strokeWidth="1.5"
+                  strokeDasharray="4 2"
+                />
+                <text
+                  x={projectedPreview.priceRange.x + projectedPreview.priceRange.width / 2}
+                  y={projectedPreview.priceRange.y + projectedPreview.priceRange.height / 2}
+                  fill="#f8fafc"
+                  fontSize="10"
+                  fontFamily="monospace"
+                  fontWeight="bold"
+                  textAnchor="middle"
+                >
+                  {projectedPreview.priceRange.change > 0 ? '+' : ''}
+                  {projectedPreview.priceRange.change.toFixed(2)}
+                  {' ('}
+                  {projectedPreview.priceRange.percentChange > 0 ? '+' : ''}
+                  {projectedPreview.priceRange.percentChange.toFixed(2)}
+                  {'%) · '}
+                  {projectedPreview.priceRange.bars} bars
+                </text>
+              </>
             )}
 
             {projectedPreview.circle && (

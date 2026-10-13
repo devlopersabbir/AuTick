@@ -29,6 +29,20 @@ export interface ProjectedDrawing {
   centerHandle?: { x: number; y: number };
   edgeHandle?: { x: number; y: number };
   text?: { x: number; y: number; text: string; fontSize: number };
+  priceRange?: {
+    rect: { x: number; y: number; width: number; height: number };
+    corners: {
+      tl: { x: number; y: number };
+      tr: { x: number; y: number };
+      br: { x: number; y: number };
+      bl: { x: number; y: number };
+    };
+    p1: { x: number; y: number };
+    p2: { x: number; y: number };
+    change: number;
+    percentChange: number;
+    bars: number;
+  };
   position?: {
     isLong: boolean;
     startX: number;
@@ -56,6 +70,15 @@ export interface ProjectedPreview {
   trendline?: { x1: number; y1: number; x2: number; y2: number };
   rectangle?: { x: number; y: number; width: number; height: number };
   circle?: { cx: number; cy: number; radius: number };
+  priceRange?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    change: number;
+    percentChange: number;
+    bars: number;
+  };
 }
 
 export interface DragState {

@@ -150,6 +150,38 @@ export function useChartDrawingProjection({
             },
           });
         }
+      } else if (d.type === 'price_range') {
+        const p1 = toCoords(d.p1);
+        const p2 = toCoords(d.p2);
+        if (p1 && p2) {
+          const minX = Math.min(p1.x, p2.x);
+          const maxX = Math.max(p1.x, p2.x);
+          const minY = Math.min(p1.y, p2.y);
+          const maxY = Math.max(p1.y, p2.y);
+          const priceChange = d.p2.price - d.p1.price;
+          results.push({
+            id: d.id,
+            type: d.type,
+            color: d.color,
+            hidden: d.hidden,
+            raw: d,
+            anchor: { x: minX, y: minY },
+            priceRange: {
+              rect: { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
+              corners: {
+                tl: { x: minX, y: minY },
+                tr: { x: maxX, y: minY },
+                br: { x: maxX, y: maxY },
+                bl: { x: minX, y: maxY },
+              },
+              p1,
+              p2,
+              change: priceChange,
+              percentChange: d.p1.price === 0 ? 0 : (priceChange / d.p1.price) * 100,
+              bars: Math.max(1, Math.round(Math.abs(d.p2.time - d.p1.time) / timeframeSeconds) + 1),
+            },
+          });
+        }
       } else if (d.type === 'circle') {
         const center = toCoords(d.center);
         const edge = toCoords(d.edge);
@@ -311,6 +343,24 @@ export function useChartDrawingProjection({
               y: Math.min(p1.y, currentMousePoint.y),
               width: Math.abs(p1.x - currentMousePoint.x),
               height: Math.abs(p1.y - currentMousePoint.y),
+            },
+          });
+        } else if (activeTool === 'price_range') {
+          const priceChange = currentMousePoint.price - drawingStartPoint.price;
+          setProjectedPreview({
+            priceRange: {
+              x: Math.min(p1.x, currentMousePoint.x),
+              y: Math.min(p1.y, currentMousePoint.y),
+              width: Math.abs(p1.x - currentMousePoint.x),
+              height: Math.abs(p1.y - currentMousePoint.y),
+              change: priceChange,
+              percentChange: drawingStartPoint.price === 0
+                ? 0
+                : (priceChange / drawingStartPoint.price) * 100,
+              bars: Math.max(
+                1,
+                Math.round(Math.abs(currentMousePoint.time - drawingStartPoint.time) / timeframeSeconds) + 1,
+              ),
             },
           });
         } else if (activeTool === 'circle') {

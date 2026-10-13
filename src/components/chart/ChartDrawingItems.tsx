@@ -259,6 +259,99 @@ export const ChartDrawingItems: React.FC<ChartDrawingItemsProps> = ({
             );
           }
 
+          if (d.type === 'price_range' && d.priceRange) {
+            const range = d.priceRange;
+            const color = range.change >= 0 ? '#089981' : '#f23645';
+            const fill = range.change >= 0
+              ? 'rgba(8, 153, 129, 0.16)'
+              : 'rgba(242, 54, 69, 0.16)';
+            const label = `${range.change > 0 ? '+' : ''}${range.change.toFixed(2)} (${range.percentChange > 0 ? '+' : ''}${range.percentChange.toFixed(2)}%) · ${range.bars} bars`;
+            const centerX = range.rect.x + range.rect.width / 2;
+            const centerY = range.rect.y + range.rect.height / 2;
+
+            return (
+              <g
+                key={d.id}
+                className="pointer-events-auto"
+                onClick={(e) => {
+                  if (activeTool !== 'cursor') return;
+                  e.stopPropagation();
+                  setSelectedDrawingId(d.id);
+                }}
+              >
+                <rect
+                  x={range.rect.x}
+                  y={range.rect.y}
+                  width={range.rect.width}
+                  height={range.rect.height}
+                  fill={fill}
+                  stroke={d.color || color}
+                  strokeWidth={isSelected ? '2.5' : '1.5'}
+                  strokeDasharray={isSelected ? '4 2' : undefined}
+                  className="cursor-move"
+                  onMouseDown={(e) => startDrag(e, d.id, 'move')}
+                />
+                <line
+                  x1={range.p1.x}
+                  y1={range.p1.y}
+                  x2={range.p2.x}
+                  y2={range.p2.y}
+                  stroke={d.color || color}
+                  strokeWidth="1"
+                  strokeDasharray="3 3"
+                  pointerEvents="none"
+                />
+                <g pointerEvents="none">
+                  <rect
+                    x={centerX - 105}
+                    y={centerY - 11}
+                    width="210"
+                    height="22"
+                    rx="4"
+                    fill="#10141f"
+                    stroke={d.color || color}
+                    strokeWidth="0.75"
+                  />
+                  <text
+                    x={centerX}
+                    y={centerY + 4}
+                    fill="#f8fafc"
+                    fontSize="10"
+                    fontFamily="monospace"
+                    fontWeight="bold"
+                    textAnchor="middle"
+                  >
+                    {label}
+                  </text>
+                </g>
+                {isSelected && (
+                  <>
+                    <circle
+                      cx={range.p1.x}
+                      cy={range.p1.y}
+                      r="5.5"
+                      fill="#ffffff"
+                      stroke={d.color || color}
+                      strokeWidth="2"
+                      className="cursor-grab"
+                      onMouseDown={(e) => startDrag(e, d.id, 'resize', 'p1')}
+                    />
+                    <circle
+                      cx={range.p2.x}
+                      cy={range.p2.y}
+                      r="5.5"
+                      fill="#ffffff"
+                      stroke={d.color || color}
+                      strokeWidth="2"
+                      className="cursor-grab"
+                      onMouseDown={(e) => startDrag(e, d.id, 'resize', 'p2')}
+                    />
+                  </>
+                )}
+              </g>
+            );
+          }
+
           if (d.type === 'circle' && d.circle && d.centerHandle && d.edgeHandle) {
             return (
               <g

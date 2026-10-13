@@ -15,6 +15,7 @@ import {
   Type,
   Trash2,
   MoveUpRight,
+  Ruler,
 } from 'lucide-react';
 
 interface ToolItem {
@@ -83,6 +84,14 @@ export const DrawingToolbar: React.FC = () => {
       icon: <Square className="h-4 w-4" />,
       category: 'draw',
       highlightColor: 'text-[#e3bd76] bg-[#30291d] border-[#a78345]',
+    },
+    {
+      id: 'price_range',
+      label: 'Price Range',
+      shortKey: 'P',
+      icon: <Ruler className="h-4 w-4" />,
+      category: 'draw',
+      highlightColor: 'text-sky-300 bg-sky-950/50 border-sky-700/60',
     },
     {
       id: 'circle',
