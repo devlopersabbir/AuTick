@@ -40,6 +40,11 @@ export const ChartDrawingItems: React.FC<ChartDrawingItemsProps> = ({
                 key={d.id}
                 className="pointer-events-auto group cursor-ns-resize"
                 onMouseDown={(e) => startDrag(e, d.id, 'move')}
+                onClick={(e) => {
+                  if (activeTool !== 'cursor') return;
+                  e.stopPropagation();
+                  setSelectedDrawingId(d.id);
+                }}
               >
                 <line
                   x1="0"

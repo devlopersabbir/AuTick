@@ -152,7 +152,13 @@ export function useChartInteractions({
           }
         } else if (init.type === 'circle') {
           if (handle === 'center') {
-            updateDrawing(dragState.drawingId, { center: currentPoint });
+            updateDrawing(dragState.drawingId, {
+              center: currentPoint,
+              edge: {
+                time: init.edge.time + deltaTime,
+                price: init.edge.price + deltaPrice,
+              },
+            });
           } else if (handle === 'edge') {
             updateDrawing(dragState.drawingId, { edge: currentPoint });
           }
@@ -198,6 +204,7 @@ export function useChartInteractions({
       const point = getChartDataPoint(clientX, clientY);
       if (point) {
         const id = crypto.randomUUID();
+        setActiveTool('cursor');
         addDrawing({
           id,
           type: 'rectangle',
@@ -208,7 +215,6 @@ export function useChartInteractions({
         setSelectedDrawingId(id);
         setDrawingStartTool(null);
         setDrawingStartPoint(null);
-        setActiveTool('cursor');
       }
     }
   }, [addDrawing, getChartDataPoint, setActiveTool, setDrawingStartPoint, setDrawingStartTool, setSelectedDrawingId]);
@@ -267,6 +273,7 @@ export function useChartInteractions({
     // 2. Long Position Tool (TradingView Style)
     if (activeTool === 'long_position') {
       const entryPrice = Math.round(clickedPoint.price * 100) / 100;
+      const entryPoint = { ...clickedPoint, price: entryPrice };
       const preview = orderPreview?.side === 'LONG' ? orderPreview : null;
       const defaults = getDefaultPositionLevels('long_position', entryPrice);
       const targetTime = getPositionToolTargetTime(
@@ -274,23 +281,24 @@ export function useChartInteractions({
         TIMEFRAME_SECONDS[currentTimeframe.toLowerCase()] ?? 60,
       );
 
+      setActiveTool('cursor');
       addDrawing({
         id: crypto.randomUUID(),
         type: 'long_position',
-        entryPoint: clickedPoint,
+        entryPoint,
         stopLossPrice: preview?.stopLoss ?? defaults.stopLossPrice,
         takeProfitPrice: preview?.takeProfit ?? defaults.takeProfitPrice,
         quantity: preview?.quantity ?? 1,
         targetTime,
       });
 
-      setActiveTool('cursor');
       return;
     }
 
     // 3. Short Position Tool (TradingView Style)
     if (activeTool === 'short_position') {
       const entryPrice = Math.round(clickedPoint.price * 100) / 100;
+      const entryPoint = { ...clickedPoint, price: entryPrice };
       const preview = orderPreview?.side === 'SHORT' ? orderPreview : null;
       const defaults = getDefaultPositionLevels('short_position', entryPrice);
       const targetTime = getPositionToolTargetTime(
@@ -298,22 +306,23 @@ export function useChartInteractions({
         TIMEFRAME_SECONDS[currentTimeframe.toLowerCase()] ?? 60,
       );
 
+      setActiveTool('cursor');
       addDrawing({
         id: crypto.randomUUID(),
         type: 'short_position',
-        entryPoint: clickedPoint,
+        entryPoint,
         stopLossPrice: preview?.stopLoss ?? defaults.stopLossPrice,
         takeProfitPrice: preview?.takeProfit ?? defaults.takeProfitPrice,
         quantity: preview?.quantity ?? 1,
         targetTime,
       });
 
-      setActiveTool('cursor');
       return;
     }
 
     // 4. Horizontal Line
     if (activeTool === 'horizontal_line') {
+      setActiveTool('cursor');
       addDrawing({
         id: crypto.randomUUID(),
         type: 'horizontal_line',
@@ -321,7 +330,6 @@ export function useChartInteractions({
         time: clickedPoint.time,
         color: '#38bdf8',
       });
-      setActiveTool('cursor');
       return;
     }
 
@@ -342,6 +350,9 @@ export function useChartInteractions({
     } else {
       const p1 = startPoint;
       const p2 = clickedPoint;
+      setDrawingStartTool(null);
+      setDrawingStartPoint(null);
+      setActiveTool('cursor');
 
       if (activeTool === 'trendline') {
         addDrawing({
@@ -370,10 +381,6 @@ export function useChartInteractions({
           color: '#a855f7',
         });
       }
-
-      setDrawingStartTool(null);
-      setDrawingStartPoint(null);
-      setActiveTool('cursor');
     }
   };
 
@@ -404,28 +411,34 @@ export function useChartInteractions({
   };
 
   const handleSaveTextAnnotation = () => {
-    if (textInputPos && textInputValue.trim()) {
+    const text = textInputValue.trim();
+    setActiveTool('cursor');
+
+    if (textInputPos && text) {
+      let savedDrawingId: string;
       if (editingTextId) {
+        savedDrawingId = editingTextId;
         updateDrawing(editingTextId, {
-          text: textInputValue.trim(),
+          text,
           color: textColor,
           fontSize: textFontSize,
         });
       } else {
+        savedDrawingId = crypto.randomUUID();
         addDrawing({
-          id: crypto.randomUUID(),
+          id: savedDrawingId,
           type: 'text',
           point: textInputPos.point,
-          text: textInputValue.trim(),
+          text,
           color: textColor,
           fontSize: textFontSize,
         });
       }
+      setSelectedDrawingId(savedDrawingId);
     }
     setTextInputPos(null);
     setTextInputValue('');
     setEditingTextId(null);
-    setActiveTool('cursor');
   };
 
   const cancelTextAnnotation = () => {
@@ -444,7 +457,6 @@ export function useChartInteractions({
     const point = getChartDataPoint(e.clientX, e.clientY);
     if (!point) return;
 
-    setSelectedDrawingId(drawingId);
     setTextInputPos({
       x: point.x,
       y: point.y,
@@ -455,6 +467,7 @@ export function useChartInteractions({
     setTextFontSize(14);
     setEditingTextId(null);
     setActiveTool('text');
+    setSelectedDrawingId(drawingId);
   };
 
   const handleTextDoubleClick = (e: React.MouseEvent<SVGGElement>, drawing: Drawing) => {
@@ -463,7 +476,6 @@ export function useChartInteractions({
     const point = getChartDataPoint(e.clientX, e.clientY);
     if (!point) return;
 
-    setSelectedDrawingId(drawing.id);
     setTextInputPos({
       x: point.x,
       y: point.y,
@@ -474,6 +486,7 @@ export function useChartInteractions({
     setTextFontSize(drawing.fontSize ?? 14);
     setEditingTextId(drawing.id);
     setActiveTool('text');
+    setSelectedDrawingId(drawing.id);
   };
 
   const handleExecutePositionOrder = (d: PositionToolDrawing) => {
@@ -486,7 +499,13 @@ export function useChartInteractions({
     });
 
     if (success) {
-      setOrderNotice(`✓ Executed ${isLong ? 'LONG' : 'SHORT'} 1oz @ ${d.entryPoint.price.toFixed(2)}`);
+      const position = useTradingSimulatorStore.getState().openPosition;
+      const quantity = position?.quantity ?? d.quantity;
+      const fillPrice = position?.entryPrice;
+      setOrderNotice(
+        `✓ Executed ${isLong ? 'LONG' : 'SHORT'} ${quantity}oz` +
+        (fillPrice === undefined ? '' : ` @ ${fillPrice.toFixed(2)}`),
+      );
       setTimeout(() => setOrderNotice(null), 3500);
     }
   };

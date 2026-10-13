@@ -61,23 +61,26 @@ export const SelectedDrawingToolbar: React.FC<SelectedDrawingToolbarProps> = ({
 
           <div className="h-4 w-px bg-[#2b354d]" />
 
-          {/* Color Palette Chips */}
-          <div className="flex items-center space-x-1">
-            {['#00d2ff', '#f59e0b', '#089981', '#f23645', '#a855f7', '#ffffff'].map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => updateDrawing(selectedProjected.id, { color: c })}
-                style={{ backgroundColor: c }}
-                title={`Set color ${c}`}
-                className={`w-3.5 h-3.5 rounded-full border border-black/40 hover:scale-125 transition-transform cursor-pointer ${
-                  selectedProjected.color === c ? 'ring-2 ring-white scale-110' : ''
-                }`}
-              />
-            ))}
-          </div>
+          {selectedProjected.type !== 'long_position' && selectedProjected.type !== 'short_position' && (
+            <>
+              <div className="flex items-center space-x-1">
+                {['#00d2ff', '#f59e0b', '#089981', '#f23645', '#a855f7', '#ffffff'].map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => updateDrawing(selectedProjected.id, { color: c })}
+                    style={{ backgroundColor: c }}
+                    title={`Set color ${c}`}
+                    className={`w-3.5 h-3.5 rounded-full border border-black/40 hover:scale-125 transition-transform cursor-pointer ${
+                      selectedProjected.color === c ? 'ring-2 ring-white scale-110' : ''
+                    }`}
+                  />
+                ))}
+              </div>
 
-          <div className="h-4 w-px bg-[#2b354d]" />
+              <div className="h-4 w-px bg-[#2b354d]" />
+            </>
+          )}
 
           {/* Delete Drawing */}
           <button

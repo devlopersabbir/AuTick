@@ -3,6 +3,8 @@
 import React, { useState } from 'react';
 import { useTradingSimulatorStore } from '@/stores/useTradingSimulatorStore';
 import { PositionSide } from '@/types';
+import { getPositionToolTargetTime } from '@/lib/trading/position-tool';
+import { TIMEFRAME_SECONDS } from '@/components/chart/chartConstants';
 import {
   TrendingUp,
   TrendingDown,
@@ -17,6 +19,7 @@ import {
 
 export const TradePanel: React.FC = () => {
   const currentCandle = useTradingSimulatorStore((s) => s.currentCandle);
+  const currentTimeframe = useTradingSimulatorStore((s) => s.currentTimeframe);
   const openPosition = useTradingSimulatorStore((s) => s.openPosition);
   const balance = useTradingSimulatorStore((s) => s.balance);
   const equity = useTradingSimulatorStore((s) => s.equity);
@@ -161,7 +164,10 @@ export const TradePanel: React.FC = () => {
           stopLossPrice: sl,
           takeProfitPrice: tp,
           quantity: qty,
-          targetTime: currentCandle.timestamp + 25 * 60,
+          targetTime: getPositionToolTargetTime(
+            currentCandle.timestamp,
+            TIMEFRAME_SECONDS[currentTimeframe.toLowerCase()] ?? 60,
+          ),
         });
       }
       setStopLoss('');

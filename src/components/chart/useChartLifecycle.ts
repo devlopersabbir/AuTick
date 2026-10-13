@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import {
   createChart, CandlestickSeries, LineStyle, createSeriesMarkers,
   type IChartApi, type ISeriesApi, type IPriceLine, type ISeriesMarkersPluginApi,
-  type Time, type UTCTimestamp, type SeriesMarker, type TickMarkType,
+  type Time, type UTCTimestamp, type SeriesMarker, type TickMarkType, type LogicalRange,
 } from 'lightweight-charts';
 import type { Candle } from '@/types';
 import type { TradingSimulatorState } from '@/stores/tradingSimulatorStoreTypes';
@@ -50,6 +50,12 @@ export function useChartLifecycle({
   const prevIndexRef = useRef<number>(-1);
   const replayAnimationFrameRef = useRef<number | null>(null);
   const renderedCurrentCandleRef = useRef<Candle | null>(null);
+  const scrollbackAnchorRef = useRef<{
+    range: LogicalRange;
+    candleCount: number;
+    oldestTimestamp: number;
+    timeframe: string;
+  } | null>(null);
 
   // Initialize chart
   useEffect(() => {
@@ -162,16 +168,32 @@ export function useChartLifecycle({
     chart.timeScale().subscribeVisibleTimeRangeChange(triggerRerender);
 
     // Infinite Historical Scrollback: detect scroll near the left edge
-    chart.timeScale().subscribeVisibleLogicalRangeChange((logicalRange) => {
+    const handleVisibleLogicalRangeChange = (logicalRange: LogicalRange | null) => {
       triggerRerender();
       if (logicalRange && logicalRange.from < 30) {
-        // Fetch older historical candles seamlessly
         const state = useTradingSimulatorStore.getState();
-        if (!state.isLoadingOlderData && !state.hasReachedBeginning && state.candles.length > 0) {
-          state.fetchOlderCandles();
+        if (
+          !scrollbackAnchorRef.current &&
+          !state.isLoadingOlderData &&
+          !state.hasReachedBeginning &&
+          state.candles.length > 0
+        ) {
+          const anchor = {
+            range: { from: logicalRange.from, to: logicalRange.to },
+            candleCount: state.candles.length,
+            oldestTimestamp: state.candles[0].timestamp,
+            timeframe: state.currentTimeframe,
+          };
+          scrollbackAnchorRef.current = anchor;
+          void state.fetchOlderCandles().then((loaded) => {
+            if (!loaded && scrollbackAnchorRef.current === anchor) {
+              scrollbackAnchorRef.current = null;
+            }
+          });
         }
       }
-    });
+    };
+    chart.timeScale().subscribeVisibleLogicalRangeChange(handleVisibleLogicalRangeChange);
 
     // Responsive resize observer
     const resizeObserver = new ResizeObserver((entries) => {
@@ -190,6 +212,8 @@ export function useChartLifecycle({
 
       resizeObserver.disconnect();
       chart.timeScale().unsubscribeVisibleTimeRangeChange(triggerRerender);
+      chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleVisibleLogicalRangeChange);
+      scrollbackAnchorRef.current = null;
       chart.remove();
       chartRef.current = null;
       seriesRef.current = null;
@@ -276,52 +300,18 @@ export function useChartLifecycle({
 
       replayAnimationFrameRef.current = requestAnimationFrame(animateLiveCandle);
     } else if (isSingleStepForward) {
-      const previousCandle = candles[currentIndex - 1];
-      const durationMs = 220;
-      const startTime = performance.now();
-
       if (replayAnimationFrameRef.current !== null) {
         cancelAnimationFrame(replayAnimationFrameRef.current);
-      }
-
-      const animateCandle = (now: number) => {
-        const elapsed = now - startTime;
-        const progress = Math.min(elapsed / durationMs, 1);
-        const eased = 1 - (1 - progress) ** 3;
-
-        const interpolatedCandle = {
-          timestamp: nextCandle.timestamp,
-          open: previousCandle.open + (nextCandle.open - previousCandle.open) * eased,
-          high: previousCandle.high + (nextCandle.high - previousCandle.high) * eased,
-          low: previousCandle.low + (nextCandle.low - previousCandle.low) * eased,
-          close: previousCandle.close + (nextCandle.close - previousCandle.close) * eased,
-        };
-        series.update({
-          time: interpolatedCandle.timestamp as UTCTimestamp,
-          open: interpolatedCandle.open,
-          high: interpolatedCandle.high,
-          low: interpolatedCandle.low,
-          close: interpolatedCandle.close,
-        });
-        renderedCurrentCandleRef.current = interpolatedCandle;
-
-        if (progress < 1) {
-          replayAnimationFrameRef.current = requestAnimationFrame(animateCandle);
-          return;
-        }
-
-        series.update({
-          time: nextCandle.timestamp as UTCTimestamp,
-          open: nextCandle.open,
-          high: nextCandle.high,
-          low: nextCandle.low,
-          close: nextCandle.close,
-        });
-        renderedCurrentCandleRef.current = nextCandle;
         replayAnimationFrameRef.current = null;
-      };
-
-      replayAnimationFrameRef.current = requestAnimationFrame(animateCandle);
+      }
+      series.update({
+        time: nextCandle.timestamp as UTCTimestamp,
+        open: nextCandle.open,
+        high: nextCandle.high,
+        low: nextCandle.low,
+        close: nextCandle.close,
+      });
+      renderedCurrentCandleRef.current = nextCandle;
     } else {
       // Re-set entire visible slice on jump, reset, cut, or older data prepended
       const visible = candles.slice(0, currentIndex + 1).map((c) => ({
@@ -337,10 +327,24 @@ export function useChartLifecycle({
       }
       series.setData(visible);
       renderedCurrentCandleRef.current = candles[currentIndex] ?? null;
+
+      const anchor = scrollbackAnchorRef.current;
+      if (anchor && currentTimeframe !== anchor.timeframe) {
+        scrollbackAnchorRef.current = null;
+      } else if (anchor && candles.length > anchor.candleCount) {
+        const addedCount = candles.length - anchor.candleCount;
+        if (candles[addedCount]?.timestamp === anchor.oldestTimestamp) {
+          chartRef.current?.timeScale().setVisibleLogicalRange({
+            from: anchor.range.from + addedCount,
+            to: anchor.range.to + addedCount,
+          });
+          scrollbackAnchorRef.current = null;
+        }
+      }
     }
 
     prevIndexRef.current = currentIndex;
-  }, [candles, currentIndex, isLiveMode, seriesRef]);
+  }, [candles, currentIndex, isLiveMode, currentTimeframe, chartRef, seriesRef]);
 
   // Update Price Lines for Open Position (Entry, SL, TP)
   useEffect(() => {
