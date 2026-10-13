@@ -96,7 +96,7 @@ export default function Home() {
         {/* Left Stage: Candlestick Chart & Bottom Trade Ledger */}
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden border-r border-[#252c36] max-lg:overflow-visible">
           {/* Main Chart Canvas with Left Drawing Toolbar */}
-          <div className="flex-1 relative min-h-[360px] flex flex-row overflow-hidden">
+          <div className="relative flex-1 min-h-[360px] overflow-hidden">
             {/* TradingView-style Left Drawing Toolbar */}
             <DrawingToolbar />
 
